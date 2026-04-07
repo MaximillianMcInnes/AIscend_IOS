@@ -11,8 +11,8 @@ struct RoutineDashboardView: View {
     @Bindable var model: AppModel
 
     private let cardColumns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.flexible(), spacing: AIscendTheme.Spacing.small),
+        GridItem(.flexible(), spacing: AIscendTheme.Spacing.small)
     ]
 
     var body: some View {
@@ -20,46 +20,68 @@ struct RoutineDashboardView: View {
             AIscendBackdrop()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
                     header
                     heroCard
                     signalGrid
                     routineDeck
                 }
-                .padding(24)
-                .padding(.bottom, 40)
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
             }
         }
     }
 
     private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(model.greeting + ", " + model.profile.displayName)
-                    .font(.system(.title2, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.mediumLarge) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                AIscendBadge(
+                    title: "Private Briefing",
+                    symbol: "sparkles",
+                    style: .accent
+                )
 
-                Text("Today's ascent")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                AIscendSectionHeader(
+                    title: "Daily intelligence",
+                    subtitle: "\(model.greeting), \(model.profile.displayName). Your routine environment is calibrated and ready to execute.",
+                    prominence: .hero
+                )
 
-                Text(Date.now.formatted(date: .abbreviated, time: .omitted))
-                    .font(.system(.subheadline, design: .rounded, weight: .medium))
-                    .foregroundStyle(AIscendTheme.secondaryText)
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendCapsule(
+                        title: model.profile.focusTrack.title,
+                        symbol: model.profile.focusTrack.symbol,
+                        isActive: true
+                    )
+                    AIscendCapsule(
+                        title: model.profile.wakeLabel,
+                        symbol: "alarm.fill",
+                        isActive: false
+                    )
+                }
             }
 
-            Spacer()
+            Spacer(minLength: AIscendTheme.Spacing.medium)
 
             Button {
-                withAnimation(.smooth(duration: 0.35)) {
+                withAnimation(AIscendTheme.Motion.reveal) {
                     model.resetOnboarding()
                 }
             } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(14)
-                    .background(.white.opacity(0.12), in: Circle())
+                ZStack {
+                    Circle()
+                        .fill(AIscendTheme.Colors.surfaceHighlight)
+                        .frame(width: 46, height: 46)
+                        .overlay(
+                            Circle()
+                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: AIscendTheme.Stroke.thin)
+                        )
+
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Refine onboarding")
@@ -67,58 +89,76 @@ struct RoutineDashboardView: View {
     }
 
     private var heroCard: some View {
-        HStack(alignment: .center, spacing: 20) {
-            ProgressRing(progress: model.progress, label: model.progressLabel)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.xLarge) {
+                dashboardHeroBody
+            }
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Routine status")
-                    .font(.system(.headline, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                dashboardHeroBody
+            }
+        }
+        .padding(AIscendTheme.Spacing.xLarge)
+        .aiscendPanel(.hero)
+        .accessibilityIdentifier("routine-hero")
+    }
 
-                Text(model.nextOpenStep?.title ?? "Today's runway is clear.")
-                    .font(.system(.title3, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+    private var dashboardHeroBody: some View {
+        Group {
+            PrecisionRing(progress: model.progress, label: model.progressLabel)
 
-                Text(model.nextOpenStep?.detail ?? "You completed the current AIscend routine. Keep the evening close-out gentle.")
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(AIscendTheme.secondaryText)
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                AIscendBadge(
+                    title: model.nextOpenStep == nil ? "Clear" : "Live Priority",
+                    symbol: "waveform.path.ecg",
+                    style: .neutral
+                )
 
-                HStack(spacing: 10) {
-                    AIscendCapsule(title: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, isActive: true)
-                    AIscendCapsule(title: model.profile.wakeLabel, symbol: "alarm.fill", isActive: false)
-                }
+                Text(model.nextOpenStep?.title ?? "The current runway is clear.")
+                    .aiscendTextStyle(.sectionTitle)
+
+                Text(
+                    model.nextOpenStep?.detail ??
+                    "You completed the active routine sequence. Keep the close-out clean and low-friction."
+                )
+                .aiscendTextStyle(.body)
+
+                Text(Date.now.formatted(date: .abbreviated, time: .omitted))
+                    .aiscendTextStyle(.caption)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(24)
-        .aiscendCard(highlighted: true)
-        .accessibilityIdentifier("routine-hero")
     }
 
     private var signalGrid: some View {
-        LazyVGrid(columns: cardColumns, spacing: 12) {
-            signalCard(
+        LazyVGrid(columns: cardColumns, spacing: AIscendTheme.Spacing.small) {
+            AIscendMetricCard(
                 title: "Climb statement",
-                value: model.profile.intention,
+                value: "Core",
+                detail: model.profile.intention,
                 symbol: "mountain.2.fill",
-                accent: .dawn
+                accent: .dawn,
+                highlighted: true
             )
-            signalCard(
+            AIscendMetricCard(
                 title: "Focus track",
-                value: model.profile.focusTrack.routinePrompt,
+                value: model.profile.focusTrack.title,
+                detail: model.profile.focusTrack.routinePrompt,
                 symbol: model.profile.focusTrack.symbol,
                 accent: .sky
             )
-            signalCard(
+            AIscendMetricCard(
                 title: "Lift-off",
-                value: "Target start is \(model.profile.wakeLabel).",
+                value: model.profile.wakeLabel,
+                detail: "Planned start time for the operating window.",
                 symbol: "clock.fill",
                 accent: .dawn
             )
-            signalCard(
+            AIscendMetricCard(
                 title: "Anchors",
-                value: model.profile.anchorSummary,
+                value: "\(model.profile.anchors.count)",
+                detail: model.profile.anchorSummary,
                 symbol: "sparkles",
                 accent: .mint
             )
@@ -126,147 +166,127 @@ struct RoutineDashboardView: View {
     }
 
     private var routineDeck: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("App routine")
-                .font(.system(.title2, design: .rounded, weight: .bold))
-                .foregroundStyle(.white)
-
-            Text("Tap a step as you complete it. AIscend keeps the day framed as a climb instead of a checklist dump.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(AIscendTheme.secondaryText)
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            AIscendSectionHeader(
+                eyebrow: "Execution",
+                title: "Routine sequence",
+                subtitle: "Tap a step as it completes. AIScend keeps the day structured like a private operating brief instead of a cluttered checklist."
+            )
 
             ForEach(model.routineSections) { section in
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                     HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
                             Text(section.title)
-                                .font(.system(.title3, design: .rounded, weight: .bold))
-                                .foregroundStyle(.white)
+                                .aiscendTextStyle(.sectionTitle)
 
                             Text(section.subtitle)
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(AIscendTheme.secondaryText)
+                                .aiscendTextStyle(.body)
                         }
 
                         Spacer()
 
-                        Text(section.accent.rawValue.capitalized)
-                            .font(.system(.caption, design: .rounded, weight: .bold))
-                            .foregroundStyle(section.accent.tint)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(section.accent.tint.opacity(0.14), in: Capsule(style: .continuous))
+                        AIscendBadge(
+                            title: section.accent.rawValue,
+                            symbol: "sparkles",
+                            style: .neutral
+                        )
                     }
 
-                    VStack(spacing: 14) {
+                    VStack(spacing: AIscendTheme.Spacing.medium) {
                         ForEach(section.steps) { step in
                             routineStepRow(step)
                         }
                     }
                 }
-                .padding(22)
-                .aiscendCard()
+                .padding(AIscendTheme.Spacing.large)
+                .aiscendPanel(.standard)
             }
         }
-    }
-
-    private func signalCard(title: String, value: String, symbol: String, accent: RoutineAccent) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(accent.gradient.opacity(0.28))
-                    .frame(width: 44, height: 44)
-
-                Image(systemName: symbol)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-
-            Text(title)
-                .font(.system(.subheadline, design: .rounded, weight: .bold))
-                .foregroundStyle(.white)
-
-            Text(value)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(AIscendTheme.secondaryText)
-        }
-        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .padding(20)
-        .aiscendCard()
     }
 
     private func routineStepRow(_ step: RoutineStep) -> some View {
         Button {
-            withAnimation(.smooth(duration: 0.22)) {
+            withAnimation(AIscendTheme.Motion.reveal) {
                 model.toggleStep(step.id)
             }
         } label: {
-            HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(step.accent.gradient.opacity(0.28))
-                        .frame(width: 44, height: 44)
+            HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: step.symbol, accent: step.accent, size: 44)
 
-                    Image(systemName: step.symbol)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
                     Text(step.title)
-                        .font(.system(.body, design: .rounded, weight: .bold))
-                        .foregroundStyle(.white)
+                        .aiscendTextStyle(.cardTitle)
 
                     Text(step.detail)
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(AIscendTheme.secondaryText)
+                        .aiscendTextStyle(.body)
                         .multilineTextAlignment(.leading)
                 }
 
                 Spacer()
 
                 Image(systemName: step.isComplete ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 23, weight: .semibold))
-                    .foregroundStyle(step.isComplete ? step.accent.tint : .white.opacity(0.45))
-                    .padding(.top, 4)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(step.isComplete ? step.accent.tint : AIscendTheme.Colors.textMuted)
+                    .padding(.top, AIscendTheme.Spacing.xxSmall)
             }
+            .padding(AIscendTheme.Spacing.medium)
+            .background(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(step.isComplete ? 0.92 : 0.62))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                    .stroke(
+                        step.isComplete ? step.accent.tint.opacity(0.34) : AIscendTheme.Colors.borderSubtle,
+                        lineWidth: AIscendTheme.Stroke.thin
+                    )
+            )
         }
         .buttonStyle(.plain)
     }
 }
 
-private struct ProgressRing: View {
+private struct PrecisionRing: View {
     let progress: Double
     let label: String
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(.white.opacity(0.12), lineWidth: 14)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 16)
 
             Circle()
-                .trim(from: 0, to: max(progress, 0.04))
+                .trim(from: 0, to: max(progress, 0.06))
                 .stroke(
-                    LinearGradient(
-                        colors: [AIscendTheme.sunrise, AIscendTheme.mint],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 14, lineCap: .round)
+                    RoutineAccent.sky.gradient,
+                    style: StrokeStyle(lineWidth: 16, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
+                .shadow(color: RoutineAccent.sky.glow, radius: 20, x: 0, y: 0)
 
-            VStack(spacing: 4) {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            AIscendTheme.Colors.accentGlow.opacity(0.16),
+                            .clear
+                        ],
+                        center: .center,
+                        startRadius: 12,
+                        endRadius: 72
+                    )
+                )
+
+            VStack(spacing: AIscendTheme.Spacing.xxSmall) {
                 Text(label)
-                    .font(.system(.title3, design: .rounded, weight: .bold))
-                    .foregroundStyle(.white)
+                    .aiscendTextStyle(.metric)
 
-                Text("done")
-                    .font(.system(.caption, design: .rounded, weight: .bold))
-                    .foregroundStyle(AIscendTheme.secondaryText)
+                Text("complete")
+                    .aiscendTextStyle(.caption)
             }
         }
-        .frame(width: 110, height: 110)
+        .frame(width: 136, height: 136)
     }
 }
 

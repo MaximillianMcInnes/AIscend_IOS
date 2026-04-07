@@ -11,9 +11,14 @@ import SwiftUI
 struct AIscendApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    init() {
+        AIscendTheme.configureSystemAppearance()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.dark)
         }
     }
 }

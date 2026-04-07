@@ -9,59 +9,143 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Bindable var model: AppModel
+    @Bindable var session: AuthSessionStore
     @State private var currentStep: Int = 0
+    @FocusState private var focusedField: Field?
 
     private let totalSteps = 3
+
+    private enum Field {
+        case name
+        case intention
+    }
 
     var body: some View {
         ZStack {
             AIscendBackdrop()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
                     topBar
                     stepProgress
                     stepContent
                 }
-                .padding(24)
-                .padding(.top, 12)
-                .padding(.bottom, 140)
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, 152)
             }
         }
         .safeAreaInset(edge: .bottom) {
             footer
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 20)
-                .background(.ultraThinMaterial)
+                .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
+                .padding(.top, AIscendTheme.Spacing.small)
+                .padding(.bottom, AIscendTheme.Spacing.mediumLarge)
+                .background(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.appBackground.opacity(0),
+                            AIscendTheme.Colors.appBackground.opacity(0.84),
+                            AIscendTheme.Colors.appBackground
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
         }
     }
 
     private var topBar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("AIscend")
-                .font(.system(.headline, design: .rounded, weight: .bold))
-                .foregroundStyle(AIscendTheme.mist.opacity(0.85))
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            HStack(alignment: .top, spacing: AIscendTheme.Spacing.mediumLarge) {
+                AIscendSectionHeader(
+                    eyebrow: "Calibration",
+                    title: "Build your operating profile.",
+                    subtitle: "This first pass defines the tone of the app: focused, controlled, and tuned to the way you want to move.",
+                    prominence: .hero
+                )
 
-            Text("Build a routine that feels calm, focused, and unmistakably yours.")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-                .accessibilityIdentifier("onboarding-title")
+                Spacer(minLength: AIscendTheme.Spacing.medium)
 
-            Text("We will shape the first version now, then you can keep refining it as the app learns your rhythm.")
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(AIscendTheme.secondaryText)
+                Button {
+                    session.signOut()
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(AIscendTheme.Colors.surfaceHighlight)
+                            .frame(width: 46, height: 46)
+                            .overlay(
+                                Circle()
+                                    .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: AIscendTheme.Stroke.thin)
+                            )
+
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Sign out")
+            }
+
+            if let user = session.user {
+                HStack(spacing: AIscendTheme.Spacing.medium) {
+                    ZStack {
+                        Circle()
+                            .fill(AIscendTheme.Colors.accentPrimary.opacity(0.18))
+                            .frame(width: 46, height: 46)
+                            .overlay(
+                                Circle()
+                                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.32), lineWidth: AIscendTheme.Stroke.thin)
+                            )
+
+                        Text(user.initials)
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                    }
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                        Text(user.displayName)
+                            .aiscendTextStyle(.cardTitle)
+
+                        Text(user.subtitle)
+                            .aiscendTextStyle(.secondaryBody)
+                    }
+
+                    Spacer()
+
+                    AIscendBadge(title: "Authenticated", symbol: "checkmark.shield.fill", style: .neutral)
+                }
+                .padding(AIscendTheme.Spacing.large)
+                .aiscendPanel(.standard)
+            }
         }
     }
 
     private var stepProgress: some View {
-        HStack(spacing: 10) {
-            ForEach(0..<totalSteps, id: \.self) { index in
-                Capsule(style: .continuous)
-                    .fill(index <= currentStep ? .white : .white.opacity(0.22))
-                    .frame(height: 6)
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+            HStack(spacing: AIscendTheme.Spacing.xSmall) {
+                ForEach(0..<totalSteps, id: \.self) { index in
+                    Capsule(style: .continuous)
+                        .fill(index <= currentStep ? AnyShapeStyle(RoutineAccent.sky.gradient) : AnyShapeStyle(AIscendTheme.Colors.surfaceHighlight))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 6)
+                }
+            }
+
+            HStack {
+                Text("Step \(currentStep + 1) of \(totalSteps)")
+                    .aiscendTextStyle(.caption)
+
+                Spacer()
+
+                AIscendBadge(
+                    title: stepLabel,
+                    symbol: "slider.horizontal.below.rectangle",
+                    style: .subtle
+                )
             }
         }
+        .padding(AIscendTheme.Spacing.large)
+        .aiscendPanel(.muted)
     }
 
     @ViewBuilder
@@ -77,100 +161,87 @@ struct OnboardingView: View {
     }
 
     private var identityStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            infoCard(
-                eyebrow: "Step 1",
-                title: "Name the climb",
-                copy: "Give AIscend a little context so the routine feels personal from day one."
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            infoPanel(
+                eyebrow: "Step 01",
+                title: "Name the pursuit",
+                copy: "Give the app the identity and objective it should optimize around from day one."
             )
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("What should AIscend call you?")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
-
-                TextField("Climber, founder, builder...", text: $model.profile.name)
-                    .textInputAutocapitalization(.words)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .stroke(.white.opacity(0.14), lineWidth: 1)
-                    )
-                    .foregroundStyle(.white)
-            }
-            .padding(22)
-            .aiscendCard()
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text("What are you ascending toward right now?")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                Text("What should AIScend call you?")
+                    .aiscendTextStyle(.cardTitle)
 
                 TextField(
-                    "Ship the MVP, reclaim my mornings, finish the portfolio...",
+                    "",
+                    text: $model.profile.name,
+                    prompt: Text("Founder, operator, builder")
+                        .foregroundStyle(AIscendTheme.Colors.textMuted)
+                )
+                .focused($focusedField, equals: .name)
+                .textInputAutocapitalization(.words)
+                .aiscendInputField(isFocused: focusedField == .name)
+            }
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.standard)
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                Text("What are you optimizing toward right now?")
+                    .aiscendTextStyle(.cardTitle)
+
+                TextField(
+                    "",
                     text: $model.profile.intention,
+                    prompt: Text("Ship the product, reclaim your mornings, sharpen your discipline")
+                        .foregroundStyle(AIscendTheme.Colors.textMuted),
                     axis: .vertical
                 )
-                .lineLimit(3...5)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(.white.opacity(0.14), lineWidth: 1)
-                )
-                .foregroundStyle(.white)
+                .focused($focusedField, equals: .intention)
+                .lineLimit(4...6)
+                .aiscendInputField(isFocused: focusedField == .intention)
             }
-            .padding(22)
-            .aiscendCard()
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.standard)
         }
     }
 
     private var focusStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            infoCard(
-                eyebrow: "Step 2",
-                title: "Choose your pace",
-                copy: "This changes the voice of the dashboard and the kind of routine nudges AIscend gives you."
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            infoPanel(
+                eyebrow: "Step 02",
+                title: "Choose the operating mode",
+                copy: "This controls the voice of the dashboard and the kind of structure AIScend applies to your day."
             )
 
             ForEach(FocusTrack.allCases) { track in
                 Button {
-                    withAnimation(.smooth(duration: 0.25)) {
+                    withAnimation(AIscendTheme.Motion.reveal) {
                         model.profile.focusTrack = track
                     }
                 } label: {
-                    HStack(alignment: .top, spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(.white.opacity(track == model.profile.focusTrack ? 0.22 : 0.12))
-                                .frame(width: 50, height: 50)
+                    HStack(alignment: .top, spacing: AIscendTheme.Spacing.mediumLarge) {
+                        AIscendIconOrb(
+                            symbol: track.symbol,
+                            accent: accent(for: track),
+                            size: 52
+                        )
 
-                            Image(systemName: track.symbol)
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
                             Text(track.title)
-                                .font(.system(.title3, design: .rounded, weight: .bold))
-                                .foregroundStyle(.white)
+                                .aiscendTextStyle(.sectionTitle)
 
                             Text(track.subtitle)
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(AIscendTheme.secondaryText)
+                                .aiscendTextStyle(.body)
                         }
 
                         Spacer()
 
                         Image(systemName: track == model.profile.focusTrack ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(track == model.profile.focusTrack ? AIscendTheme.sunrise : .white.opacity(0.45))
+                            .foregroundStyle(track == model.profile.focusTrack ? AIscendTheme.Colors.accentGlow : AIscendTheme.Colors.textMuted)
                     }
-                    .padding(22)
-                    .aiscendCard(highlighted: track == model.profile.focusTrack)
+                    .padding(AIscendTheme.Spacing.large)
+                    .aiscendPanel(track == model.profile.focusTrack ? .hero : .standard)
                 }
                 .buttonStyle(.plain)
             }
@@ -178,17 +249,16 @@ struct OnboardingView: View {
     }
 
     private var rhythmStep: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            infoCard(
-                eyebrow: "Step 3",
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            infoPanel(
+                eyebrow: "Step 03",
                 title: "Set the rhythm",
-                copy: "Pick the start time and habits that make your ascent repeatable, not exhausting."
+                copy: "Define the daily start time and the habit anchors that keep the system repeatable without turning it noisy."
             )
 
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                 Text("Preferred lift-off time")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .aiscendTextStyle(.cardTitle)
 
                 DatePicker(
                     "Preferred lift-off time",
@@ -197,25 +267,26 @@ struct OnboardingView: View {
                 )
                 .datePickerStyle(.compact)
                 .labelsHidden()
-                .tint(AIscendTheme.sunrise)
-                .foregroundStyle(.white)
+                .tint(AIscendTheme.Colors.accentSoft)
+                .colorScheme(.dark)
 
-                Text("Current target: \(model.profile.wakeLabel)")
-                    .font(.system(.footnote, design: .rounded, weight: .medium))
-                    .foregroundStyle(AIscendTheme.secondaryText)
+                AIscendBadge(
+                    title: "Current target \(model.profile.wakeLabel)",
+                    symbol: "alarm.fill",
+                    style: .neutral
+                )
             }
-            .padding(22)
-            .aiscendCard()
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.standard)
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                 Text("Habit anchors")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.92))
+                    .aiscendTextStyle(.cardTitle)
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AIscendTheme.Spacing.small) {
                     ForEach(HabitAnchor.allCases) { anchor in
                         Button {
-                            withAnimation(.smooth(duration: 0.25)) {
+                            withAnimation(AIscendTheme.Motion.reveal) {
                                 model.toggleAnchor(anchor)
                             }
                         } label: {
@@ -225,69 +296,60 @@ struct OnboardingView: View {
                                 isActive: model.profile.anchors.contains(anchor)
                             )
                             .frame(maxWidth: .infinity)
+                            .padding(.vertical, AIscendTheme.Spacing.xSmall)
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
                 Text(model.profile.anchorSummary)
-                    .font(.system(.footnote, design: .rounded, weight: .medium))
-                    .foregroundStyle(AIscendTheme.secondaryText)
+                    .aiscendTextStyle(.secondaryBody)
             }
-            .padding(22)
-            .aiscendCard()
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.standard)
         }
     }
 
-    private func infoCard(eyebrow: String, title: String, copy: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(eyebrow)
-                .font(.system(.footnote, design: .rounded, weight: .bold))
-                .foregroundStyle(AIscendTheme.sunrise)
-
-            Text(title)
-                .font(.system(.title2, design: .rounded, weight: .bold))
-                .foregroundStyle(.white)
-
-            Text(copy)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(AIscendTheme.secondaryText)
-        }
-        .padding(22)
-        .aiscendCard(highlighted: true)
+    private func infoPanel(eyebrow: String, title: String, copy: String) -> some View {
+        AIscendSectionHeader(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: copy,
+            prominence: .hero
+        )
+        .padding(AIscendTheme.Spacing.xLarge)
+        .aiscendPanel(.hero)
     }
 
     private var footer: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: AIscendTheme.Spacing.medium) {
             if currentStep > 0 {
-                Button("Back") {
-                    withAnimation(.smooth(duration: 0.25)) {
+                Button {
+                    withAnimation(AIscendTheme.Motion.reveal) {
                         currentStep -= 1
                     }
+                } label: {
+                    AIscendButtonLabel(title: "Back", leadingSymbol: "arrow.left")
                 }
-                .font(.system(.headline, design: .rounded, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 14)
-                .background(.white.opacity(0.10), in: Capsule(style: .continuous))
+                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                .frame(maxWidth: 160)
             }
 
-            Spacer()
-
-            Button(currentStep == totalSteps - 1 ? "Start my routine" : "Continue") {
-                withAnimation(.smooth(duration: 0.25)) {
+            Button {
+                withAnimation(AIscendTheme.Motion.reveal) {
                     if currentStep < totalSteps - 1 {
                         currentStep += 1
                     } else {
                         model.completeOnboarding()
                     }
                 }
+            } label: {
+                AIscendButtonLabel(
+                    title: currentStep == totalSteps - 1 ? "Enter dashboard" : "Continue",
+                    trailingSymbol: "arrow.right"
+                )
             }
-            .font(.system(.headline, design: .rounded, weight: .bold))
-            .foregroundStyle(AIscendTheme.midnight)
-            .padding(.horizontal, 22)
-            .padding(.vertical, 14)
-            .background(AIscendTheme.sunrise, in: Capsule(style: .continuous))
+            .buttonStyle(AIscendButtonStyle(variant: .primary))
         }
     }
 
@@ -303,8 +365,30 @@ struct OnboardingView: View {
             }
         )
     }
+
+    private var stepLabel: String {
+        switch currentStep {
+        case 0:
+            "Identity"
+        case 1:
+            "Pace"
+        default:
+            "Rhythm"
+        }
+    }
+
+    private func accent(for track: FocusTrack) -> RoutineAccent {
+        switch track {
+        case .momentum:
+            .dawn
+        case .mastery:
+            .sky
+        case .balance:
+            .mint
+        }
+    }
 }
 
 #Preview {
-    OnboardingView(model: AppModel())
+    OnboardingView(model: AppModel(), session: AuthSessionStore())
 }

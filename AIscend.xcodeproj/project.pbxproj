@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		82B6F7642F85300000B0974B /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 82B6F7672F85300000B0974B /* FirebaseCore */; };
+		82B6F7682F85410000B0974B /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 82B6F76C2F85410000B0974B /* FirebaseAuth */; };
+		82B6F7692F85410000B0974B /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 82B6F76D2F85410000B0974B /* GoogleSignIn */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,6 +59,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				82B6F7642F85300000B0974B /* FirebaseCore in Frameworks */,
+				82B6F7682F85410000B0974B /* FirebaseAuth in Frameworks */,
+				82B6F7692F85410000B0974B /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -107,6 +111,7 @@
 				82B6F7332F85246100B0974B /* Sources */,
 				82B6F7342F85246100B0974B /* Frameworks */,
 				82B6F7352F85246100B0974B /* Resources */,
+				82B6F76A2F85410000B0974B /* Inject Google URL Scheme */,
 			);
 			buildRules = (
 			);
@@ -118,6 +123,8 @@
 			name = AIscend;
 			packageProductDependencies = (
 				82B6F7672F85300000B0974B /* FirebaseCore */,
+				82B6F76C2F85410000B0974B /* FirebaseAuth */,
+				82B6F76D2F85410000B0974B /* GoogleSignIn */,
 			);
 			productName = AIscend;
 			productReference = 82B6F7372F85246100B0974B /* AIscend.app */;
@@ -203,6 +210,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				82B6F76B2F85410000B0974B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 82B6F7382F85246100B0974B /* Products */;
@@ -240,6 +248,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		82B6F76A2F85410000B0974B /* Inject Google URL Scheme */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(PROJECT_DIR)/AIscend/GoogleService-Info.plist",
+			);
+			name = "Inject Google URL Scheme";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "SERVICE_INFO_PLIST=\"${PROJECT_DIR}/AIscend/GoogleService-Info.plist\"\nAPP_INFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif [ ! -f \"${SERVICE_INFO_PLIST}\" ]; then\n  echo \"GoogleService-Info.plist not found; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nREVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"${SERVICE_INFO_PLIST}\" 2>/dev/null)\n\nif [ -z \"${REVERSED_CLIENT_ID}\" ]; then\n  echo \"REVERSED_CLIENT_ID missing; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nif /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" >/dev/null 2>&1; then\n  if /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" | grep -Fq \"${REVERSED_CLIENT_ID}\"; then\n    exit 0\n  fi\nelse\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" \"${APP_INFO_PLIST}\"\nfi\n\nINDEX=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" 2>/dev/null | grep -c \"Dict {\")\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX} dict\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleTypeRole string Editor\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes array\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes:0 string ${REVERSED_CLIENT_ID}\" \"${APP_INFO_PLIST}\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		82B6F7332F85246100B0974B /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -276,17 +306,6 @@
 			targetProxy = 82B6F7522F85246200B0974B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 12.7.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCBuildConfiguration section */
 		82B6F7592F85246200B0974B /* Debug */ = {
@@ -413,6 +432,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AIscend/AIscend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Preview Content\"";
@@ -429,6 +449,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscend;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -442,6 +466,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = AIscend/AIscend.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Preview Content\"";
@@ -458,6 +483,10 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscend;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -540,14 +569,6 @@
 		};
 /* End XCBuildConfiguration section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		82B6F7672F85300000B0974B /* FirebaseCore */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseCore;
-		};
-/* End XCSwiftPackageProductDependency section */
-
 /* Begin XCConfigurationList section */
 		82B6F7322F85246100B0974B /* Build configuration list for PBXProject "AIscend" */ = {
 			isa = XCConfigurationList;
@@ -586,6 +607,43 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.7.0;
+			};
+		};
+		82B6F76B2F85410000B0974B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 8.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		82B6F7672F85300000B0974B /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		82B6F76C2F85410000B0974B /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		82B6F76D2F85410000B0974B /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 82B6F76B2F85410000B0974B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 82B6F72F2F85246100B0974B /* Project object */;
 }

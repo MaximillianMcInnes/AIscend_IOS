@@ -6,6 +6,9 @@
 //
 
 import UIKit
+#if canImport(GoogleSignIn)
+import GoogleSignIn
+#endif
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(
@@ -14,5 +17,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         FirebaseBootstrapper.configure()
         return true
+    }
+
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        #if canImport(GoogleSignIn)
+        return GIDSignIn.sharedInstance.handle(url)
+        #else
+        return false
+        #endif
     }
 }
