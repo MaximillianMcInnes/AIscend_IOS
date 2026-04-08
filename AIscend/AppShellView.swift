@@ -5,81 +5,34 @@
 //  Created by Codex on 4/7/26.
 //
 
+import Foundation
 import SwiftUI
-
-private enum AppShellTab: Hashable {
-    case advisor
-    case home
-    case routine
-    case account
-}
 
 struct AppShellView: View {
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
-    @State private var selectedTab: AppShellTab = .home
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            NavigationStack {
-                AIscendChatScreenContainer(session: session)
-                    .toolbar(.hidden, for: .navigationBar)
-            }
-            .tag(AppShellTab.advisor)
-            .tabItem {
-                Label("Advisor", systemImage: "message.fill")
-            }
-
-            NavigationStack {
-                RoutineDashboardView(
-                    model: model,
-                    onOpenAdvisor: { selectedTab = .advisor },
-                    onOpenRoutine: { selectedTab = .routine },
-                    onOpenAccount: { selectedTab = .account },
-                    onRefine: { model.resetOnboarding() }
-                )
-                    .toolbar(.hidden, for: .navigationBar)
-            }
-            .tag(AppShellTab.home)
-            .tabItem {
-                Label("Home", systemImage: "house.fill")
-            }
-
-            NavigationStack {
-                RoutineBlueprintView(model: model)
-                    .aiscendNavigationChrome()
-            }
-            .tag(AppShellTab.routine)
-            .tabItem {
-                Label("Routine", systemImage: "square.grid.2x2.fill")
-            }
-
-            NavigationStack {
-                AccountView(model: model, session: session)
-                    .aiscendNavigationChrome()
-            }
-            .tag(AppShellTab.account)
-            .tabItem {
-                Label("Account", systemImage: "person.crop.circle.fill")
-            }
-        }
-        .tint(AIscendTheme.Colors.accentGlow)
-        .toolbarBackground(AIscendTheme.Colors.secondaryBackground.opacity(0.96), for: .tabBar)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarColorScheme(.dark, for: .tabBar)
+        MainTabContainer(model: model, session: session)
     }
 }
 
-private struct RoutineBlueprintView: View {
+struct RoutineBlueprintView: View {
     @Bindable var model: AppModel
+    @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var badgeManager: BadgeManager
+    let onOpenCheckIn: () -> Void
+    let onOpenConsistency: () -> Void
 
     var body: some View {
         ZStack {
             AIscendBackdrop()
+            DashboardAmbientLayer()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
                     blueprintHero
+                    consistencyPanel
                     intentionPanel
                     anchorPanel
                     routineSections
@@ -103,6 +56,51 @@ private struct RoutineBlueprintView: View {
                 }
             }
         }
+    }
+
+    private var consistencyPanel: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            AIscendSectionHeader(
+                eyebrow: "Consistency",
+                title: dailyCheckInStore.hasCheckedInToday ? "Today's chain is protected" : "Today's chain is still open",
+                subtitle: "AIScend keeps the routine tied to a daily accountability loop so the plan feels lived, not just admired."
+            )
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                AIscendMetricCard(
+                    title: "Current streak",
+                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
+                    detail: dailyCheckInStore.snapshot.motivationalLine,
+                    symbol: dailyCheckInStore.hasCheckedInToday ? "checkmark.seal.fill" : "flame.fill",
+                    accent: .sky,
+                    highlighted: true
+                )
+                AIscendMetricCard(
+                    title: "Badges",
+                    value: "\(badgeManager.earnedCount)",
+                    detail: "Quiet status markers earned through follow-through.",
+                    symbol: "sparkles",
+                    accent: .mint
+                )
+            }
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                Button(action: onOpenCheckIn) {
+                    AIscendButtonLabel(
+                        title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
+                        leadingSymbol: "calendar.badge.checkmark"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                Button(action: onOpenConsistency) {
+                    AIscendButtonLabel(title: "Open Streaks", leadingSymbol: "flame.fill")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+            }
+        }
+        .padding(AIscendTheme.Spacing.large)
+        .aiscendPanel(.elevated)
     }
 
     private var blueprintHero: some View {
@@ -254,18 +252,25 @@ private struct RoutineBlueprintView: View {
     }
 }
 
-private struct AccountView: View {
+struct AccountView: View {
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
+    @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var badgeManager: BadgeManager
+    @ObservedObject var notificationManager: NotificationManager
+    @State private var showingDailyCheckIn = false
+    @State private var showingStreaks = false
 
     var body: some View {
         ZStack {
             AIscendBackdrop()
+            DashboardAmbientLayer()
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
                     userPanel
                     routineStatePanel
+                    consistencyPanel
                     actionsPanel
 
                     if let errorMessage = session.errorMessage {
@@ -281,6 +286,37 @@ private struct AccountView: View {
         }
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await notificationManager.refreshAuthorizationStatus()
+        }
+        .sheet(isPresented: $showingDailyCheckIn) {
+            DailyCheckInView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                isPremium: badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked }),
+                onComplete: {},
+                onDismiss: { showingDailyCheckIn = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingStreaks) {
+            StreaksView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                onOpenCheckIn: {
+                    showingStreaks = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        showingDailyCheckIn = true
+                    }
+                },
+                onDismiss: { showingStreaks = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 
     private var userPanel: some View {
@@ -413,6 +449,103 @@ private struct AccountView: View {
         }
         .padding(AIscendTheme.Spacing.large)
         .aiscendPanel(.elevated)
+    }
+
+    private var consistencyPanel: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            AIscendSectionHeader(
+                eyebrow: "Consistency",
+                title: "Your private discipline layer",
+                subtitle: "Streaks, badges, and daily accountability now sit inside the account hub instead of floating as isolated features."
+            )
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                AIscendMetricCard(
+                    title: "Current streak",
+                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
+                    detail: dailyCheckInStore.snapshot.statusTitle,
+                    symbol: dailyCheckInStore.hasCheckedInToday ? "checkmark.seal.fill" : "flame.fill",
+                    accent: .sky,
+                    highlighted: true
+                )
+                AIscendMetricCard(
+                    title: "Best streak",
+                    value: "\(dailyCheckInStore.snapshot.bestStreak)d",
+                    detail: "Highest sustained run so far.",
+                    symbol: "scope",
+                    accent: .mint
+                )
+            }
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                AIscendMetricCard(
+                    title: "Badges",
+                    value: "\(badgeManager.earnedCount)",
+                    detail: badgeManager.earnedBadges.first?.title ?? "No markers earned yet.",
+                    symbol: "sparkles",
+                    accent: .dawn
+                )
+                AIscendMetricCard(
+                    title: "Reminders",
+                    value: "\(notificationManager.preferences.enabledCount)",
+                    detail: notificationManager.authorizationState.badgeTitle,
+                    symbol: "bell.badge.fill",
+                    accent: .sky
+                )
+            }
+
+            if !badgeManager.earnedBadges.isEmpty {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    Text("Latest badges")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+                    ForEach(Array(badgeManager.earnedBadges.prefix(3))) { badge in
+                        HStack(spacing: AIscendTheme.Spacing.small) {
+                            AIscendIconOrb(symbol: badge.symbol, accent: badge.accent, size: 34)
+
+                            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                                Text(badge.title)
+                                    .aiscendTextStyle(.cardTitle)
+
+                                Text(badge.detail)
+                                    .aiscendTextStyle(.secondaryBody)
+                                    .lineLimit(2)
+                            }
+                        }
+                        .padding(AIscendTheme.Spacing.medium)
+                        .background(
+                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.68))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                        )
+                    }
+                }
+            }
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                Button {
+                    showingDailyCheckIn = true
+                } label: {
+                    AIscendButtonLabel(
+                        title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
+                        leadingSymbol: "calendar.badge.checkmark"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                Button {
+                    showingStreaks = true
+                } label: {
+                    AIscendButtonLabel(title: "Open Streaks", leadingSymbol: "flame.fill")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+            }
+        }
+        .padding(AIscendTheme.Spacing.large)
+        .aiscendPanel(.standard)
     }
 
     private func messagePanel(title: String, message: String) -> some View {

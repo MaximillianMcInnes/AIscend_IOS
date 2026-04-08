@@ -201,7 +201,9 @@ struct DashboardHeader: View {
     let greeting: String
     let subtitle: String
     let streakDays: Int
+    let checkedInToday: Bool
     let initials: String
+    let onOpenStreaks: () -> Void
     let onOpenAccount: () -> Void
 
     var body: some View {
@@ -227,24 +229,27 @@ struct DashboardHeader: View {
 
             VStack(alignment: .trailing, spacing: AIscendTheme.Spacing.small) {
                 HStack(spacing: AIscendTheme.Spacing.small) {
-                    HStack(spacing: AIscendTheme.Spacing.xSmall) {
-                        Image(systemName: "flame.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                    Button(action: onOpenStreaks) {
+                        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+                            Image(systemName: checkedInToday ? "checkmark.seal.fill" : "flame.fill")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AIscendTheme.Colors.accentGlow)
 
-                        Text("\(streakDays)d")
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                            Text("\(streakDays)d")
+                                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                        }
+                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .padding(.vertical, AIscendTheme.Spacing.xSmall)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.88))
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, AIscendTheme.Spacing.small)
-                    .padding(.vertical, AIscendTheme.Spacing.xSmall)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.88))
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
 
                     Button(action: onOpenAccount) {
                         Text(initials)
@@ -590,8 +595,12 @@ struct DashboardInsightCard: View {
 struct DashboardRoutineCard: View {
     let progress: Double
     let streakDays: Int
+    let checkedInToday: Bool
     let steps: [RoutineStep]
     let onToggle: (RoutineStep) -> Void
+    let onShare: () -> Void
+    let onOpenCheckIn: () -> Void
+    let onOpenConsistency: () -> Void
     let onOpenRoutine: () -> Void
 
     var body: some View {
@@ -601,8 +610,8 @@ struct DashboardRoutineCard: View {
 
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
                     AIscendBadge(
-                        title: "\(streakDays)-day control streak",
-                        symbol: "flame.fill",
+                        title: checkedInToday ? "\(streakDays)-day protected streak" : "\(streakDays)-day live streak",
+                        symbol: checkedInToday ? "checkmark.seal.fill" : "flame.fill",
                         style: .neutral
                     )
 
@@ -613,6 +622,21 @@ struct DashboardRoutineCard: View {
                         .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                 }
             }
+
+            HStack {
+                Spacer(minLength: 0)
+
+                AIScendShareEntryButton(title: "Share progress", action: onShare)
+            }
+            .padding(.top, AIscendTheme.Spacing.medium)
+
+            DashboardConsistencyStrip(
+                checkedInToday: checkedInToday,
+                streakDays: streakDays,
+                onOpenCheckIn: onOpenCheckIn,
+                onOpenConsistency: onOpenConsistency
+            )
+            .padding(.top, AIscendTheme.Spacing.mediumLarge)
 
             VStack(spacing: AIscendTheme.Spacing.small) {
                 ForEach(steps) { step in
@@ -662,6 +686,82 @@ struct DashboardRoutineCard: View {
             .buttonStyle(AIscendButtonStyle(variant: .secondary))
             .padding(.top, AIscendTheme.Spacing.large)
         }
+    }
+}
+
+private struct DashboardConsistencyStrip: View {
+    let checkedInToday: Bool
+    let streakDays: Int
+    let onOpenCheckIn: () -> Void
+    let onOpenConsistency: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                Text(checkedInToday ? "Today's signal is protected" : "Today's check-in is still open")
+                    .aiscendTextStyle(.cardTitle)
+
+                Text(checkedInToday ? "The chain is clean. Reopen it only if you want to refine the reflection." : "Close the day with a fast check-in before attention drifts.")
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+
+                Text("\(streakDays)-day live streak")
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                DashboardCompactActionButton(
+                    title: checkedInToday ? "Review" : "Check In",
+                    symbol: "calendar.badge.checkmark",
+                    action: onOpenCheckIn
+                )
+
+                DashboardCompactActionButton(
+                    title: "Streaks",
+                    symbol: "flame.fill",
+                    action: onOpenConsistency
+                )
+            }
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct DashboardCompactActionButton: View {
+    let title: String
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AIscendTheme.Spacing.xSmall) {
+                Image(systemName: symbol)
+                    .font(.system(size: 11, weight: .semibold))
+
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+            }
+            .padding(.horizontal, AIscendTheme.Spacing.small)
+            .padding(.vertical, AIscendTheme.Spacing.xSmall)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(AIscendTheme.Colors.secondaryBackground.opacity(0.92))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

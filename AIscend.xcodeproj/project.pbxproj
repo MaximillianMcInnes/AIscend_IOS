@@ -442,6 +442,8 @@
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIScend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -476,6 +478,8 @@
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIScend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -9,13 +9,18 @@ import SwiftUI
 
 struct RoutineDashboardView: View {
     @Bindable var model: AppModel
+    @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var badgeManager: BadgeManager
     var onOpenAdvisor: () -> Void = {}
     var onOpenRoutine: () -> Void = {}
+    var onOpenCheckIn: () -> Void = {}
+    var onOpenConsistency: () -> Void = {}
     var onOpenAccount: () -> Void = {}
     var onRefine: () -> Void = {}
 
     @State private var hasAppeared = false
     @State private var showingPremium = false
+    @StateObject private var shareCoordinator = ShareCoordinator()
 
     private var snapshot: DashboardSnapshot {
         .live(from: model)
@@ -48,6 +53,14 @@ struct RoutineDashboardView: View {
         return count == 1 ? "1 baseline" : "\(count) baselines"
     }
 
+    private var liveStreakDays: Int {
+        dailyCheckInStore.snapshot.currentStreak
+    }
+
+    private var checkedInToday: Bool {
+        dailyCheckInStore.hasCheckedInToday
+    }
+
     private var routinePreviewSteps: [RoutineStep] {
         let allSteps = model.routineSections.flatMap(\.steps)
         let openSteps = allSteps.filter { !$0.isComplete }
@@ -66,8 +79,10 @@ struct RoutineDashboardView: View {
                         DashboardHeader(
                             greeting: "\(model.greeting), \(firstName)",
                             subtitle: snapshot.headerSubtitle,
-                            streakDays: snapshot.streakDays,
+                            streakDays: liveStreakDays,
+                            checkedInToday: checkedInToday,
                             initials: avatarInitials,
+                            onOpenStreaks: onOpenConsistency,
                             onOpenAccount: onOpenAccount
                         )
                         .dashboardReveal(isVisible: hasAppeared, delay: 0.02)
@@ -128,9 +143,22 @@ struct RoutineDashboardView: View {
 
                             DashboardRoutineCard(
                                 progress: model.progress,
-                                streakDays: snapshot.streakDays,
+                                streakDays: liveStreakDays,
+                                checkedInToday: checkedInToday,
                                 steps: routinePreviewSteps,
                                 onToggle: toggle,
+                                onShare: {
+                                    shareCoordinator.present(
+                                        .routineProgress(
+                                            progress: model.progress,
+                                            streakDays: liveStreakDays,
+                                            nextStep: model.nextOpenStep,
+                                            identityLine: AIScendSharePayload.identityLine(displayName: model.profile.displayName)
+                                        )
+                                    )
+                                },
+                                onOpenCheckIn: onOpenCheckIn,
+                                onOpenConsistency: onOpenConsistency,
                                 onOpenRoutine: onOpenRoutine
                             )
                         }
@@ -175,6 +203,14 @@ struct RoutineDashboardView: View {
                 onDismiss: { showingPremium = false }
             )
         }
+        .sheet(item: $shareCoordinator.activePayload) { payload in
+            SharePreviewView(
+                payload: payload,
+                onDismiss: { shareCoordinator.dismiss() }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
         .preferredColorScheme(.dark)
         .onAppear {
             hasAppeared = true
@@ -210,6 +246,11 @@ struct RoutineDashboardView: View {
         withAnimation(AIscendTheme.Motion.reveal) {
             model.toggleStep(step.id)
         }
+
+        badgeManager.recordRoutineProgress(
+            progress: model.progress,
+            streak: dailyCheckInStore.snapshot.currentStreak
+        )
     }
 }
 
@@ -243,6 +284,8 @@ private extension View {
             model.toggleStep("mission")
             model.toggleStep("deep-work")
             return model
-        }()
+        }(),
+        dailyCheckInStore: DailyCheckInStore(),
+        badgeManager: BadgeManager()
     )
 }

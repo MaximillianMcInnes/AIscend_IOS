@@ -211,7 +211,7 @@ enum HabitAnchor: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-enum RoutineAccent: String, Codable {
+enum RoutineAccent: String, Codable, Hashable, Sendable {
     case dawn
     case sky
     case mint

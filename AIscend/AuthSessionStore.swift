@@ -24,7 +24,7 @@ import FirebaseCore
 import GoogleSignIn
 #endif
 
-struct SessionUser: Equatable, Identifiable {
+struct SessionUser: Equatable, Identifiable, Sendable {
     let id: String
     let displayName: String
     let email: String?
