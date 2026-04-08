@@ -162,11 +162,7 @@ struct EntryOnboardingFlowView: View {
 
     private var topBar: some View {
         HStack {
-            AIscendBadge(
-                title: "Private Intelligence",
-                symbol: "lock.shield.fill",
-                style: .accent
-            )
+            AIscendBrandMark(size: 50)
 
             Spacer()
 
@@ -716,13 +712,7 @@ private struct EntryHeroArtwork: View {
                 .frame(width: 164, height: 164)
                 .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.28), radius: 18, x: 0, y: 0)
 
-            VStack(spacing: AIscendTheme.Spacing.xxSmall) {
-                Text("AIS")
-                    .aiscendTextStyle(.metric)
-
-                Text("STRUCTURED ANALYSIS")
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
-            }
+            AIscendBrandMark(size: 126, showsWordmark: false)
 
             VStack(spacing: AIscendTheme.Spacing.small) {
                 Spacer()

@@ -45,6 +45,8 @@ private struct SessionLoadingView: View {
             AIscendBackdrop()
 
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                AIscendBrandMark(size: 60)
+
                 AIscendBadge(
                     title: "Secure Session",
                     symbol: "lock.shield.fill",

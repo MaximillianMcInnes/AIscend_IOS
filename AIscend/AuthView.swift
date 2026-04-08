@@ -56,11 +56,7 @@ struct AuthView: View {
     private var heroPanel: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
             HStack {
-                AIscendBadge(
-                    title: "Private Access",
-                    symbol: "lock.shield.fill",
-                    style: .accent
-                )
+                AIscendBrandMark(size: 56)
 
                 Spacer()
 
@@ -82,6 +78,9 @@ struct AuthView: View {
                 AIscendBadge(title: "Google", symbol: "globe", style: .neutral)
                 AIscendBadge(title: "Apple", symbol: "apple.logo", style: .neutral)
                 AIscendBadge(title: "Firebase", symbol: "bolt.fill", style: .neutral)
+                if session.canUseGoogleSignIn {
+                    AIscendBadge(title: "Ready", symbol: "checkmark.circle.fill", style: .success)
+                }
             }
 
             if !model.analysisGoals.isEmpty {

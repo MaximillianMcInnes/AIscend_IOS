@@ -14,6 +14,14 @@ struct AppShellView: View {
     var body: some View {
         TabView {
             NavigationStack {
+                AIscendChatScreenContainer(session: session)
+                    .toolbar(.hidden, for: .navigationBar)
+            }
+            .tabItem {
+                Label("Advisor", systemImage: "message.fill")
+            }
+
+            NavigationStack {
                 RoutineDashboardView(model: model)
                     .toolbar(.hidden, for: .navigationBar)
             }

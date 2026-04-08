@@ -438,6 +438,82 @@ struct AIscendBadge: View {
     }
 }
 
+struct AIscendBrandMark: View {
+    var size: CGFloat = 64
+    var showsWordmark: Bool = true
+    var alignment: HorizontalAlignment = .leading
+
+    var body: some View {
+        let emblemSize = size
+        let wordmarkSpacing = max(AIscendTheme.Spacing.xSmall, size * 0.14)
+
+        Group {
+            if showsWordmark {
+                HStack(spacing: wordmarkSpacing) {
+                    emblem(size: emblemSize)
+
+                    VStack(alignment: alignment, spacing: AIscendTheme.Spacing.xxSmall) {
+                        Text("AIScend")
+                            .font(.system(size: max(18, size * 0.34), weight: .bold, design: .default))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                        Text("PRIVATE ANALYSIS")
+                            .font(.system(size: max(10, size * 0.15), weight: .semibold, design: .default))
+                            .tracking(1.2)
+                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                    }
+                }
+            } else {
+                emblem(size: emblemSize)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("AIScend")
+    }
+
+    private func emblem(size: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.secondaryBackground.opacity(0.96),
+                            AIscendTheme.Colors.cardGradientEnd.opacity(0.92)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    AIscendTheme.Colors.borderStrong,
+                                    AIscendTheme.Colors.accentGlow.opacity(0.34)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: AIscendTheme.Stroke.thin
+                        )
+                )
+
+            RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                .fill(AIscendTheme.Colors.accentPrimary.opacity(0.18))
+                .blur(radius: size * 0.22)
+                .padding(size * 0.18)
+
+            Image("BrandMark")
+                .resizable()
+                .scaledToFit()
+                .padding(size * 0.18)
+        }
+        .frame(width: size, height: size)
+        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.24), radius: size * 0.22, x: 0, y: size * 0.08)
+    }
+}
+
 struct AIscendIconOrb: View {
     let symbol: String
     let accent: RoutineAccent
