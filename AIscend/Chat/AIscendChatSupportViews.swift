@@ -298,78 +298,13 @@ struct AIscendChatEmptyState: View {
 struct AIscendChatPremiumUpsellSheet: View {
     let premiumURL: URL?
     let onDismiss: () -> Void
-
-    @Environment(\.openURL) private var openURL
+    var trialEligible: Bool = true
 
     var body: some View {
-        ZStack {
-            AIscendBackdrop()
-
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack {
-                    AIscendBadge(
-                        title: "Premium",
-                        symbol: "sparkles",
-                        style: .accent
-                    )
-
-                    Spacer()
-
-                    Button(action: onDismiss) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                            .frame(width: 34, height: 34)
-                            .background(
-                                Circle()
-                                    .fill(AIscendTheme.Colors.surfaceHighlight)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                AIscendSectionHeader(
-                    title: "Unlock unlimited advisor conversations",
-                    subtitle: "Continue with unlimited chats, priority responses, and a cleaner runway for longer strategic sessions."
-                )
-
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                    premiumPoint("Unlimited advisor chats with full history")
-                    premiumPoint("Faster responses for longer sessions")
-                    premiumPoint("A private workspace built for deeper strategy")
-                }
-
-                if let premiumURL {
-                    Button {
-                        openURL(premiumURL)
-                    } label: {
-                        AIscendButtonLabel(title: "Start your 7-day trial", leadingSymbol: "arrow.up.forward")
-                    }
-                    .buttonStyle(AIscendButtonStyle(variant: .primary))
-                }
-
-                Button(action: onDismiss) {
-                    AIscendButtonLabel(title: "Continue in chat", leadingSymbol: "chevron.left")
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .secondary))
-            }
-            .padding(AIscendTheme.Spacing.xLarge)
-            .aiscendChatGlassCard(cornerRadius: 30, glowOpacity: 0.14)
-            .padding(AIscendTheme.Spacing.screenInset)
-        }
-        .presentationDragIndicator(.visible)
-        .preferredColorScheme(.dark)
-    }
-
-    private func premiumPoint(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(AIscendTheme.Colors.accentGlow)
-                .padding(.top, 2)
-
-            Text(text)
-                .aiscendTextStyle(.body)
-        }
+        AIscendUpgradeView(
+            premiumURL: premiumURL,
+            onDismiss: onDismiss,
+            trialEligible: trialEligible
+        )
     }
 }

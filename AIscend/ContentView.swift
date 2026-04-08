@@ -20,13 +20,13 @@ struct ContentView: View {
                 if model.hasCompletedEntryOnboarding {
                     AuthView(model: model, session: session)
                 } else {
-                    EntryOnboardingFlowView(model: model)
+                    AIscendPremiumOnboardingExperienceView(model: model, isAuthenticated: false)
                 }
             case .signedIn:
                 if model.hasCompletedOnboarding {
                     AppShellView(model: model, session: session)
                 } else {
-                    OnboardingView(model: model, session: session)
+                    AIscendPremiumOnboardingExperienceView(model: model, isAuthenticated: true)
                 }
             }
         }

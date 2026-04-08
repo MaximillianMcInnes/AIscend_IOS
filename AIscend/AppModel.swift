@@ -9,75 +9,84 @@ import Foundation
 import Observation
 
 enum AnalysisGoal: String, CaseIterable, Codable, Identifiable, Hashable {
-    case structure
-    case strengths
-    case refinement
-    case presentation
-    case tracking
+    case jawline
+    case skin
+    case eyes
+    case hair
+    case symmetry
+    case overallAttractiveness
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .structure:
-            "Understand facial structure"
-        case .strengths:
-            "See standout strengths"
-        case .refinement:
-            "Spot high-impact refinements"
-        case .presentation:
-            "Refine grooming and presentation"
-        case .tracking:
-            "Track aesthetic change over time"
+        case .jawline:
+            "Jawline"
+        case .skin:
+            "Skin"
+        case .eyes:
+            "Eyes"
+        case .hair:
+            "Hair"
+        case .symmetry:
+            "Symmetry"
+        case .overallAttractiveness:
+            "Overall attractiveness"
         }
     }
 
     var shortTitle: String {
         switch self {
-        case .structure:
-            "Structure"
-        case .strengths:
-            "Strengths"
-        case .refinement:
-            "Refinements"
-        case .presentation:
-            "Presentation"
-        case .tracking:
-            "Tracking"
+        case .jawline:
+            "Jawline"
+        case .skin:
+            "Skin"
+        case .eyes:
+            "Eyes"
+        case .hair:
+            "Hair"
+        case .symmetry:
+            "Symmetry"
+        case .overallAttractiveness:
+            "Attractiveness"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .structure:
-            "Get clearer language around facial balance, profile, and proportion."
-        case .strengths:
-            "See what already stands out so you know what to preserve and emphasize."
-        case .refinement:
-            "Identify weaker areas and presentation opportunities without guesswork."
-        case .presentation:
-            "Use analysis to guide grooming, styling, and visual polish more intentionally."
-        case .tracking:
-            "Compare future captures with a more consistent baseline and cleaner context."
+        case .jawline:
+            "Define lower-face structure and profile strength."
+        case .skin:
+            "Improve texture, clarity, and overall finish."
+        case .eyes:
+            "Sharpen presence and reduce a tired read."
+        case .hair:
+            "Upgrade framing, density perception, and shape."
+        case .symmetry:
+            "Balance the overall facial read."
+        case .overallAttractiveness:
+            "Lift first impression across the full face."
         }
     }
 
     var symbol: String {
         switch self {
-        case .structure:
-            "viewfinder.circle.fill"
-        case .strengths:
+        case .jawline:
+            "triangle.bottomhalf.filled"
+        case .skin:
             "sparkles"
-        case .refinement:
-            "slider.horizontal.3"
-        case .presentation:
-            "person.crop.rectangle.stack.fill"
-        case .tracking:
-            "chart.line.uptrend.xyaxis"
+        case .eyes:
+            "eye.fill"
+        case .hair:
+            "scissors"
+        case .symmetry:
+            "square.split.diagonal.2x2"
+        case .overallAttractiveness:
+            "crown.fill"
         }
     }
 
-    static let defaultSelection: [AnalysisGoal] = [.structure, .refinement, .tracking]
+    static let defaultSelection: [AnalysisGoal] = []
 }
 
 enum FocusTrack: String, CaseIterable, Codable, Identifiable {
@@ -513,6 +522,11 @@ final class AppModel {
         completedStepIDs.removeAll()
     }
 
+    func completeOnboardingExperience() {
+        hasCompletedEntryOnboarding = true
+        completeOnboarding()
+    }
+
     func completeEntryOnboarding() {
         hasCompletedEntryOnboarding = true
     }
@@ -531,6 +545,7 @@ final class AppModel {
 
     func resetOnboarding() {
         hasCompletedOnboarding = false
+        hasCompletedEntryOnboarding = false
         completedStepIDs.removeAll()
     }
 

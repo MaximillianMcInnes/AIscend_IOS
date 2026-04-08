@@ -68,7 +68,8 @@ private struct AIscendChatScreen: View {
             .sheet(isPresented: $viewModel.isPremiumUpsellPresented) {
                 AIscendChatPremiumUpsellSheet(
                     premiumURL: viewModel.premiumURL,
-                    onDismiss: viewModel.dismissPremiumUpsell
+                    onDismiss: viewModel.dismissPremiumUpsell,
+                    trialEligible: viewModel.quota.trialEligible
                 )
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {

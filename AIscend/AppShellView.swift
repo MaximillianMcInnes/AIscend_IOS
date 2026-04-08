@@ -7,32 +7,49 @@
 
 import SwiftUI
 
+private enum AppShellTab: Hashable {
+    case advisor
+    case home
+    case routine
+    case account
+}
+
 struct AppShellView: View {
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
+    @State private var selectedTab: AppShellTab = .home
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             NavigationStack {
                 AIscendChatScreenContainer(session: session)
                     .toolbar(.hidden, for: .navigationBar)
             }
+            .tag(AppShellTab.advisor)
             .tabItem {
                 Label("Advisor", systemImage: "message.fill")
             }
 
             NavigationStack {
-                RoutineDashboardView(model: model)
+                RoutineDashboardView(
+                    model: model,
+                    onOpenAdvisor: { selectedTab = .advisor },
+                    onOpenRoutine: { selectedTab = .routine },
+                    onOpenAccount: { selectedTab = .account },
+                    onRefine: { model.resetOnboarding() }
+                )
                     .toolbar(.hidden, for: .navigationBar)
             }
+            .tag(AppShellTab.home)
             .tabItem {
-                Label("Today", systemImage: "waveform.path.ecg")
+                Label("Home", systemImage: "house.fill")
             }
 
             NavigationStack {
                 RoutineBlueprintView(model: model)
                     .aiscendNavigationChrome()
             }
+            .tag(AppShellTab.routine)
             .tabItem {
                 Label("Routine", systemImage: "square.grid.2x2.fill")
             }
@@ -41,6 +58,7 @@ struct AppShellView: View {
                 AccountView(model: model, session: session)
                     .aiscendNavigationChrome()
             }
+            .tag(AppShellTab.account)
             .tabItem {
                 Label("Account", systemImage: "person.crop.circle.fill")
             }
