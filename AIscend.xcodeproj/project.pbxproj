@@ -187,7 +187,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 2620;
 				TargetAttributes = {
 					82B6F7362F85246100B0974B = {
 						CreatedOnToolsVersion = 16.2;
@@ -254,13 +254,14 @@
 /* Begin PBXShellScriptBuildPhase section */
 		82B6F76A2F85410000B0974B /* Inject Google URL Scheme */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(PROJECT_DIR)/AIscend/GoogleService-Info.plist",
+				"$(PROJECT_DIR)/AIscend/Resources/Configuration/GoogleService-Info.plist",
 			);
 			name = "Inject Google URL Scheme";
 			outputFileListPaths = (
@@ -269,7 +270,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "SERVICE_INFO_PLIST=\"${PROJECT_DIR}/AIscend/GoogleService-Info.plist\"\nAPP_INFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif [ ! -f \"${SERVICE_INFO_PLIST}\" ]; then\n  echo \"GoogleService-Info.plist not found; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nREVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"${SERVICE_INFO_PLIST}\" 2>/dev/null)\n\nif [ -z \"${REVERSED_CLIENT_ID}\" ]; then\n  echo \"REVERSED_CLIENT_ID missing; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nif /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" >/dev/null 2>&1; then\n  if /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" | grep -Fq \"${REVERSED_CLIENT_ID}\"; then\n    exit 0\n  fi\nelse\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" \"${APP_INFO_PLIST}\"\nfi\n\nINDEX=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" 2>/dev/null | grep -c \"Dict {\")\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX} dict\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleTypeRole string Editor\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes array\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes:0 string ${REVERSED_CLIENT_ID}\" \"${APP_INFO_PLIST}\"\n";
+			shellScript = "SERVICE_INFO_PLIST=\"${PROJECT_DIR}/AIscend/Resources/Configuration/GoogleService-Info.plist\"\nAPP_INFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif [ ! -f \"${SERVICE_INFO_PLIST}\" ]; then\n  echo \"GoogleService-Info.plist not found; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nREVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"${SERVICE_INFO_PLIST}\" 2>/dev/null)\n\nif [ -z \"${REVERSED_CLIENT_ID}\" ]; then\n  echo \"REVERSED_CLIENT_ID missing; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nif /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" >/dev/null 2>&1; then\n  if /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" | grep -Fq \"${REVERSED_CLIENT_ID}\"; then\n    exit 0\n  fi\nelse\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" \"${APP_INFO_PLIST}\"\nfi\n\nINDEX=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" 2>/dev/null | grep -c \"Dict {\")\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX} dict\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleTypeRole string Editor\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes array\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes:0 string ${REVERSED_CLIENT_ID}\" \"${APP_INFO_PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -344,8 +345,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -368,7 +371,10 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -407,8 +413,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -424,7 +432,11 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -435,15 +447,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = AIscend/AIscend.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AIscend/Resources/Configuration/AIscend.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIScend uses your photo library so you can save and revisit premium share cards.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIscend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -460,6 +475,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscend;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -471,15 +488,18 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = AIscend/AIscend.entitlements;
+				CODE_SIGN_ENTITLEMENTS = AIscend/Resources/Configuration/AIscend.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Preview Content\"";
+				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIScend uses your photo library so you can save and revisit premium share cards.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIscend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -496,6 +516,8 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscend;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -508,12 +530,14 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XG4ZNJKHN3;
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscendTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -527,12 +551,14 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XG4ZNJKHN3;
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscendTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -545,11 +571,13 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XG4ZNJKHN3;
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscendUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -562,11 +590,13 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = XG4ZNJKHN3;
+				DEVELOPMENT_TEAM = Y62MKRS69V;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = uk.co.aiscend.AIscendUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE = "";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
