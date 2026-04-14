@@ -457,6 +457,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AIscend uses the camera so you can capture today's daily photo inside the app.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIscend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -498,6 +499,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
+				INFOPLIST_KEY_NSCameraUsageDescription = "AIscend uses the camera so you can capture today's daily photo inside the app.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "AIScend saves premium share cards to your photo library when you choose Save Image.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "AIscend uses your photo library so you can save and revisit premium share cards.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

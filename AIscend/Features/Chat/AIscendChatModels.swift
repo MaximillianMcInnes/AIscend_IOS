@@ -334,6 +334,7 @@ enum AIscendChatError: LocalizedError, Equatable {
 struct AIscendChatConfiguration {
     let backendBaseURL: URL?
     let premiumURL: URL?
+    let scanAnalyzePath: String
     let chatCollectionCandidates: [String]
     let quotaCollectionCandidates: [String]
     let lowQuotaThreshold: Int
@@ -342,6 +343,7 @@ struct AIscendChatConfiguration {
     static let live = AIscendChatConfiguration(
         backendBaseURL: urlValue(for: "AISCEND_API_BASE_URL"),
         premiumURL: urlValue(for: "AISCEND_PREMIUM_URL"),
+        scanAnalyzePath: stringValue(for: "AISCEND_SCAN_ANALYZE_PATH") ?? "scan/analyze",
         chatCollectionCandidates: uniqueValues(
             [
                 stringValue(for: "AISCEND_CHAT_COLLECTION"),

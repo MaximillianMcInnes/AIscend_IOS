@@ -11,9 +11,9 @@ import UIKit
 enum AIscendChatPalette {
     static let userBubble = LinearGradient(
         colors: [
-            Color(hex: "9567FF"),
-            Color(hex: "6A35F0"),
-            Color(hex: "4D249F")
+            AIscendTheme.Colors.accentGlow,
+            AIscendTheme.Colors.accentSoft,
+            AIscendTheme.Colors.accentPrimary
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -21,8 +21,8 @@ enum AIscendChatPalette {
 
     static let assistantBubble = LinearGradient(
         colors: [
-            Color(hex: "171B24").opacity(0.94),
-            Color(hex: "10141B").opacity(0.98)
+            AIscendTheme.Colors.surfaceGlass.opacity(0.96),
+            AIscendTheme.Colors.cardGradientEnd.opacity(0.98)
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -30,8 +30,8 @@ enum AIscendChatPalette {
 
     static let chrome = LinearGradient(
         colors: [
-            Color(hex: "141923").opacity(0.92),
-            Color(hex: "0F131A").opacity(0.96)
+            AIscendTheme.Colors.surfaceGlass.opacity(0.96),
+            AIscendTheme.Colors.surfaceMuted.opacity(0.98)
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -50,7 +50,7 @@ enum AIscendChatPalette {
     static let heroGlow = RadialGradient(
         colors: [
             AIscendTheme.Colors.accentGlow.opacity(0.22),
-            AIscendTheme.Colors.accentPrimary.opacity(0.08),
+            AIscendTheme.Colors.accentCyan.opacity(0.08),
             .clear
         ],
         center: .topTrailing,
@@ -138,6 +138,7 @@ struct AIscendChatMarkdownText: View {
 }
 
 struct AIscendChatTypingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var animate = false
 
     var body: some View {
@@ -172,7 +173,7 @@ struct AIscendChatTypingIndicator: View {
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
         .onAppear {
-            animate = true
+            animate = !reduceMotion
         }
     }
 }

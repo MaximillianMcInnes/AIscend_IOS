@@ -20,34 +20,34 @@ struct DashboardAmbientLayer: View {
         ZStack {
             RadialGradient(
                 colors: [
-                    AIscendTheme.Colors.accentPrimary.opacity(0.20),
+                    AIscendTheme.Colors.accentPrimary.opacity(0.22),
                     .clear
                 ],
                 center: .topTrailing,
                 startRadius: 20,
-                endRadius: 320
+                endRadius: 360
             )
             .offset(x: 130, y: -150)
 
             RadialGradient(
                 colors: [
-                    Color.white.opacity(0.05),
+                    AIscendTheme.Colors.accentCyan.opacity(0.08),
                     .clear
                 ],
                 center: .topLeading,
                 startRadius: 20,
-                endRadius: 260
+                endRadius: 280
             )
             .offset(x: -140, y: -180)
 
             RadialGradient(
                 colors: [
-                    AIscendTheme.Colors.accentGlow.opacity(0.12),
+                    AIscendTheme.Colors.accentMint.opacity(0.10),
                     .clear
                 ],
                 center: .bottomLeading,
                 startRadius: 10,
-                endRadius: 280
+                endRadius: 320
             )
             .offset(x: -180, y: 260)
         }
@@ -85,12 +85,12 @@ struct DashboardGlassCard<Content: View>: View {
             .background(background)
             .clipShape(shape)
             .overlay(shape.stroke(borderGradient, lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.34), radius: shadowRadius, x: 0, y: 16)
+            .shadow(color: Color.black.opacity(0.38), radius: shadowRadius, x: 0, y: 16)
             .shadow(color: glowColor, radius: 26, x: 0, y: 0)
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 30, style: .continuous)
+        RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
     }
 
     private var shadowRadius: CGFloat {
@@ -107,9 +107,9 @@ struct DashboardGlassCard<Content: View>: View {
     private var glowColor: Color {
         switch tone {
         case .hero:
-            AIscendTheme.Colors.accentPrimary.opacity(0.20)
+            AIscendTheme.Colors.accentPrimary.opacity(0.18)
         case .premium:
-            AIscendTheme.Colors.accentGlow.opacity(0.18)
+            AIscendTheme.Colors.accentGlow.opacity(0.16)
         case .standard:
             AIscendTheme.Colors.accentPrimary.opacity(0.08)
         case .subtle:
@@ -122,8 +122,9 @@ struct DashboardGlassCard<Content: View>: View {
         case .hero:
             LinearGradient(
                 colors: [
-                    Color(hex: "181C27").opacity(0.96),
-                    Color(hex: "10131B").opacity(0.98)
+                    AIscendTheme.Colors.cardGradientStart.opacity(0.98),
+                    AIscendTheme.Colors.accentDeep.opacity(0.42),
+                    AIscendTheme.Colors.cardGradientEnd.opacity(1)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -131,8 +132,8 @@ struct DashboardGlassCard<Content: View>: View {
         case .premium:
             LinearGradient(
                 colors: [
-                    Color(hex: "191526").opacity(0.98),
-                    Color(hex: "0F121A").opacity(1)
+                    AIscendTheme.Colors.cardGradientStart.opacity(0.98),
+                    AIscendTheme.Colors.surfaceInteractive.opacity(0.98)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -140,7 +141,7 @@ struct DashboardGlassCard<Content: View>: View {
         case .subtle:
             LinearGradient(
                 colors: [
-                    AIscendTheme.Colors.secondaryBackground.opacity(0.92),
+                    AIscendTheme.Colors.surfaceMuted.opacity(0.94),
                     AIscendTheme.Colors.appBackground.opacity(0.94)
                 ],
                 startPoint: .topLeading,
@@ -149,8 +150,8 @@ struct DashboardGlassCard<Content: View>: View {
         case .standard:
             LinearGradient(
                 colors: [
-                    AIscendTheme.Colors.secondaryBackground.opacity(0.94),
-                    Color(hex: "10141B").opacity(0.98)
+                    AIscendTheme.Colors.surfaceGlass.opacity(0.96),
+                    AIscendTheme.Colors.cardGradientEnd.opacity(0.98)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -173,11 +174,11 @@ struct DashboardGlassCard<Content: View>: View {
     private var background: some View {
         ZStack {
             shape.fill(fillGradient)
-            shape.fill(.ultraThinMaterial).opacity(0.10)
+            shape.fill(.ultraThinMaterial).opacity(0.14)
             shape.fill(
                 LinearGradient(
                     colors: [
-                        Color.white.opacity(0.06),
+                        Color.white.opacity(0.08),
                         .clear,
                         AIscendTheme.Colors.accentGlow.opacity(tone == .hero || tone == .premium ? 0.10 : 0.03)
                     ],
@@ -189,9 +190,17 @@ struct DashboardGlassCard<Content: View>: View {
             if tone == .hero || tone == .premium {
                 Circle()
                     .fill(AIscendTheme.Colors.accentGlow.opacity(tone == .hero ? 0.18 : 0.12))
-                    .frame(width: 220, height: 220)
-                    .blur(radius: 28)
-                    .offset(x: 90, y: -120)
+                    .frame(width: 240, height: 240)
+                    .blur(radius: 34)
+                    .offset(x: 110, y: -130)
+            }
+
+            if tone == .hero {
+                Circle()
+                    .fill(AIscendTheme.Colors.accentCyan.opacity(0.08))
+                    .frame(width: 180, height: 180)
+                    .blur(radius: 26)
+                    .offset(x: -120, y: 80)
             }
         }
     }
@@ -568,13 +577,13 @@ struct DashboardInsightCard: View {
     let highlighted: Bool
 
     var body: some View {
-        DashboardGlassCard(tone: highlighted ? .standard : .subtle) {
+        DashboardGlassCard(tone: highlighted ? .hero : .subtle) {
             HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                 AIscendIconOrb(symbol: insight.symbol, accent: insight.accent, size: 42)
 
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
                     AIscendBadge(
-                        title: highlighted ? "AI Priority" : "AI Signal",
+                        title: highlighted ? "Priority signal" : "AI signal",
                         symbol: "sparkles",
                         style: highlighted ? .accent : .subtle
                     )
@@ -604,7 +613,7 @@ struct DashboardRoutineCard: View {
     let onOpenRoutine: () -> Void
 
     var body: some View {
-        DashboardGlassCard {
+        DashboardGlassCard(tone: .standard) {
             HStack(alignment: .center, spacing: AIscendTheme.Spacing.large) {
                 DashboardRoutineDial(progress: progress, streakDays: streakDays)
 
@@ -615,10 +624,10 @@ struct DashboardRoutineCard: View {
                         style: .neutral
                     )
 
-                    Text("Private discipline compounds your result faster than intensity.")
+                    Text("Your routine is the quiet system behind the visible result.")
                         .aiscendTextStyle(.sectionTitle)
 
-                    Text("Handle the next three moves cleanly, then reopen the full routine when you want the longer sequence.")
+                    Text("Keep the next three moves clean and deliberate, then reopen the full routine whenever you want the longer sequence.")
                         .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                 }
             }
@@ -727,7 +736,11 @@ private struct DashboardConsistencyStrip: View {
         .padding(AIscendTheme.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
@@ -754,7 +767,7 @@ private struct DashboardCompactActionButton: View {
             .padding(.vertical, AIscendTheme.Spacing.xSmall)
             .background(
                 Capsule(style: .continuous)
-                    .fill(AIscendTheme.Colors.secondaryBackground.opacity(0.92))
+                    .fill(AIscendTheme.Colors.surfaceInteractive.opacity(0.92))
             )
             .overlay(
                 Capsule(style: .continuous)
@@ -819,7 +832,7 @@ struct DashboardRecentScanRow: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                AIscendTheme.Colors.accentPrimary.opacity(0.20),
+                                AIscendTheme.Colors.accentPrimary.opacity(0.24),
                                 AIscendTheme.Colors.surfaceHighlight.opacity(0.9)
                             ],
                             startPoint: .topLeading,
@@ -855,7 +868,11 @@ struct DashboardRecentScanRow: View {
         .padding(AIscendTheme.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.62))
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(Color.white.opacity(0.02))
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
@@ -887,10 +904,10 @@ struct DashboardPremiumCard: View {
                         style: .accent
                     )
 
-                    Text("Unlock deeper ratio reports and advanced placement reads")
+                    Text("Unlock deeper reports and richer placement reads")
                         .aiscendTextStyle(.sectionTitle)
 
-                    Text("Side-profile breakdowns, richer progress reports, and deeper advisor access sit behind the premium layer.")
+                    Text("Side-profile breakdowns, more visual progress reports, and deeper advisor access sit behind the premium layer.")
                         .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
 
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {

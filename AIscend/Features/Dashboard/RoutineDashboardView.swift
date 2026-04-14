@@ -19,6 +19,7 @@ struct RoutineDashboardView: View {
     var onOpenCheckIn: () -> Void = {}
     var onOpenConsistency: () -> Void = {}
     var onOpenDailyPhoto: () -> Void = {}
+    var onCaptureDailyPhoto: () -> Void = {}
     var onOpenScan: () -> Void = {}
     var onOpenAccount: () -> Void = {}
     var onRefine: () -> Void = {}
@@ -121,85 +122,450 @@ struct RoutineDashboardView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                AIscendBackdrop()
-                DashboardAmbientLayer()
+        ZStack {
+            AIscendBackdrop()
+            reportAmbientLayer
 
-                ScrollViewReader { proxy in
-                    ScrollView(showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                            DashboardWelcomeHeader(
-                                greeting: "\(model.greeting), \(firstName)",
-                                subtitle: snapshot.headerSubtitle,
-                                dateLabel: todayLabel,
-                                streakDays: liveStreakDays,
-                                checkedInToday: checkedInToday,
-                                initials: avatarInitials,
-                                onOpenStreaks: onOpenConsistency,
-                                onOpenAccount: onOpenAccount
-                            )
-                            .dashboardReveal(isVisible: hasAppeared, delay: 0.02)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                    reportHeader
+                    reportScoreRow
+                    optimizationBanner
+                    reportChartCard
+                    cohortBanner
+                    reportSummaryRow
+                }
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
 
-                            DashboardCommandDeckCard(
-                                snapshot: snapshot,
-                                progressLabel: model.progressLabel,
-                                scanCountLabel: scanCountLabel,
-                                isPremiumUnlocked: isPremiumUnlocked,
-                                onOpenAdvisor: onOpenAdvisor,
-                                onOpenRoutine: onOpenRoutine,
-                                onOpenScan: onOpenScan,
-                                onOpenHistory: { scroll(to: .scans, proxy: proxy) },
-                                onOpenUpgrade: { showingPremium = true }
-                            )
-                            .id(DashboardSectionID.analytics)
-                            .dashboardReveal(isVisible: hasAppeared, delay: 0.08)
+    private var projectedScore: Int {
+        min(snapshot.score + max(3, Int(snapshot.delta.rounded())), 99)
+    }
 
-                            DashboardActionDeck { action in
-                                handle(action, proxy: proxy)
-                            }
-                            .dashboardReveal(isVisible: hasAppeared, delay: 0.14)
+    private var highlightedTrendPoint: DashboardTrendPoint {
+        let midpoint = snapshot.trendPoints.count / 2
+        return snapshot.trendPoints.indices.contains(midpoint)
+            ? snapshot.trendPoints[midpoint]
+            : (snapshot.trendPoints.last ?? DashboardTrendPoint(label: "Now", score: Double(snapshot.score)))
+    }
 
-                            if geometry.size.width >= 760 {
-                                HStack(alignment: .top, spacing: AIscendTheme.Spacing.large) {
-                                    primaryRail
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
+    private var cohortHeadline: String {
+        "Ahead of \(max(1, 100 - snapshot.percentile))% of current reads"
+    }
 
-                                    secondaryRail
-                                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                                }
-                            } else {
-                                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                                    primaryRail
-                                    secondaryRail
-                                }
-                            }
+    private var streakProgress: Double {
+        min(max(Double(liveStreakDays) / 14, 0.08), 1)
+    }
+
+    private var reportAmbientLayer: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.accentPrimary.opacity(0.54),
+                            AIscendTheme.Colors.accentDeep.opacity(0.24),
+                            .clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 420, height: 420)
+                .blur(radius: 36)
+                .offset(x: 120, y: -220)
+
+            Circle()
+                .fill(AIscendTheme.Colors.accentGlow.opacity(0.14))
+                .frame(width: 280, height: 280)
+                .blur(radius: 28)
+                .offset(x: -150, y: -120)
+        }
+        .ignoresSafeArea()
+    }
+
+    private var reportHeader: some View {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                AIscendBadge(
+                    title: todayLabel,
+                    symbol: "calendar",
+                    style: .neutral
+                )
+
+                Text("Last report")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                Text("\(model.greeting), \(firstName)")
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textSecondary)
+
+                Text(snapshot.headerSubtitle)
+                    .aiscendTextStyle(.body, color: AIscendTheme.Colors.textMuted)
+            }
+
+            Spacer(minLength: AIscendTheme.Spacing.small)
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                AIscendTopBarButton(symbol: "camera.aperture", highlighted: true, action: onOpenScan)
+                AIscendTopBarButton(symbol: "ellipsis", action: onOpenAccount)
+            }
+        }
+    }
+
+    private var reportScoreRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                reportMetricCard(
+                    title: "Current score",
+                    value: "\(snapshot.score)",
+                    detail: snapshot.tier,
+                    highlighted: false
+                )
+
+                reportMetricCard(
+                    title: "Predicted score",
+                    value: "\(projectedScore)",
+                    detail: "Next cycle",
+                    highlighted: true
+                )
+            }
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                reportMetricCard(
+                    title: "Current score",
+                    value: "\(snapshot.score)",
+                    detail: snapshot.tier,
+                    highlighted: false
+                )
+
+                reportMetricCard(
+                    title: "Predicted score",
+                    value: "\(projectedScore)",
+                    detail: "Next cycle",
+                    highlighted: true
+                )
+            }
+        }
+    }
+
+    private var optimizationBanner: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: "arrow.up.right")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+            Text("Optimize up to +\(String(format: "%.1f", snapshot.delta)) pts")
+                .font(.system(size: 21, weight: .semibold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Spacer(minLength: 0)
+
+            AIscendBadge(
+                title: model.profile.focusTrack.title,
+                symbol: model.profile.focusTrack.symbol,
+                style: .accent
+            )
+        }
+        .padding(.horizontal, AIscendTheme.Spacing.large)
+        .padding(.vertical, AIscendTheme.Spacing.mediumLarge)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private var reportChartCard: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                    Text("Score / cycle")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                    Text(snapshot.heroStatement)
+                        .font(.system(size: 19, weight: .semibold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: AIscendTheme.Spacing.small)
+
+                Text("\(Int(highlightedTrendPoint.score))")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    .padding(.horizontal, AIscendTheme.Spacing.small)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(AIscendTheme.Colors.accentPrimary)
+                    )
+            }
+
+            Chart {
+                ForEach(snapshot.trendPoints) { point in
+                    AreaMark(
+                        x: .value("Period", point.label),
+                        yStart: .value("Baseline", minTrendValue),
+                        yEnd: .value("Score", point.score)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.accentPrimary.opacity(0.22),
+                                AIscendTheme.Colors.accentGlow.opacity(0.02)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+
+                    LineMark(
+                        x: .value("Period", point.label),
+                        y: .value("Score", point.score)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                    .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                }
+
+                RuleMark(x: .value("Selected", highlightedTrendPoint.label))
+                    .foregroundStyle(AIscendTheme.Colors.textMuted.opacity(0.35))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+
+                PointMark(
+                    x: .value("Selected", highlightedTrendPoint.label),
+                    y: .value("Score", highlightedTrendPoint.score)
+                )
+                .symbolSize(260)
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+                PointMark(
+                    x: .value("Selected", highlightedTrendPoint.label),
+                    y: .value("Score", highlightedTrendPoint.score)
+                )
+                .symbolSize(90)
+                .foregroundStyle(Color.white)
+            }
+            .chartLegend(.hidden)
+            .chartYAxis(.hidden)
+            .chartXAxis {
+                AxisMarks(values: snapshot.trendPoints.map(\.label)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0))
+                    AxisTick(stroke: StrokeStyle(lineWidth: 0))
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label)
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(AIscendTheme.Colors.textMuted)
                         }
-                        .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-                        .padding(.top, AIscendTheme.Spacing.large)
-                        .padding(.bottom, AIscendTheme.Spacing.xxLarge + AIscendTheme.Spacing.large)
                     }
                 }
             }
+            .chartYScale(domain: minTrendValue...(maxTrendValue + 4))
+            .frame(height: 220)
         }
-        .sheet(isPresented: $showingPremium) {
-            DashboardPremiumUpsellSheet(
-                premiumURL: AIscendChatConfiguration.live.premiumURL,
-                onDismiss: { showingPremium = false }
-            )
+        .padding(AIscendTheme.Spacing.large)
+        .background(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "151515").opacity(0.98),
+                            AIscendTheme.Colors.surfaceMuted.opacity(0.96)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.34), radius: 24, x: 0, y: 16)
+    }
+
+    private var cohortBanner: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Text(cohortHeadline)
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "globe.americas.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
         }
-        .sheet(item: $shareCoordinator.activePayload) { payload in
-            SharePreviewView(
-                payload: payload,
-                onDismiss: { shareCoordinator.dismiss() }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
+        .padding(.horizontal, AIscendTheme.Spacing.large)
+        .padding(.vertical, AIscendTheme.Spacing.mediumLarge)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private var reportSummaryRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                reportSummaryCard(
+                    title: "Routine complete",
+                    value: model.progressLabel,
+                    detail: checkedInToday ? "Check-in protected" : nextMoveTitle,
+                    progress: max(model.progress, 0.08)
+                )
+
+                reportSummaryCard(
+                    title: "Streak live",
+                    value: "\(liveStreakDays)d",
+                    detail: checkedInToday ? "Momentum protected" : dailySignalTitle,
+                    progress: streakProgress
+                )
+            }
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                reportSummaryCard(
+                    title: "Routine complete",
+                    value: model.progressLabel,
+                    detail: checkedInToday ? "Check-in protected" : nextMoveTitle,
+                    progress: max(model.progress, 0.08)
+                )
+
+                reportSummaryCard(
+                    title: "Streak live",
+                    value: "\(liveStreakDays)d",
+                    detail: checkedInToday ? "Momentum protected" : dailySignalTitle,
+                    progress: streakProgress
+                )
+            }
         }
-        .preferredColorScheme(.dark)
-        .onAppear {
-            hasAppeared = true
+    }
+
+    private var minTrendValue: Double {
+        let values = snapshot.trendPoints.map(\.score)
+        return max((values.min() ?? Double(snapshot.score)) - 4, 0)
+    }
+
+    private var maxTrendValue: Double {
+        snapshot.trendPoints.map(\.score).max() ?? Double(snapshot.score)
+    }
+
+    private func reportMetricCard(title: String, value: String, detail: String, highlighted: Bool) -> some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: highlighted ? Color.white.opacity(0.78) : AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Text(detail)
+                .aiscendTextStyle(.caption, color: highlighted ? Color.white.opacity(0.78) : AIscendTheme.Colors.textSecondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AIscendTheme.Spacing.large)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    highlighted
+                    ? AnyShapeStyle(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.accentSoft,
+                                AIscendTheme.Colors.accentPrimary
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    : AnyShapeStyle(
+                        LinearGradient(
+                            colors: [
+                                Color(hex: "161616").opacity(0.96),
+                                AIscendTheme.Colors.surfaceMuted.opacity(0.94)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(highlighted ? Color.white.opacity(0.14) : AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func reportSummaryCard(title: String, value: String, detail: String, progress: Double) -> some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Text(detail)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                .lineLimit(2)
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule(style: .continuous)
+                        .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+
+                    Capsule(style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    AIscendTheme.Colors.accentPrimary,
+                                    AIscendTheme.Colors.accentGlow
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(20, geometry.size.width * progress))
+                }
+            }
+            .frame(height: 10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AIscendTheme.Spacing.large)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "151515").opacity(0.98),
+                            AIscendTheme.Colors.surfaceMuted.opacity(0.96)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
     }
 
     private var primaryRail: some View {
@@ -249,13 +615,14 @@ struct RoutineDashboardView: View {
 
             DashboardRailSection(
                 eyebrow: "Local Archive",
-                title: "Daily capture and baselines",
-                subtitle: "A daily photo keeps the record honest, while recent baselines keep context close."
+                title: "Archive",
+                subtitle: "Today’s photo and recent baselines in one place."
             ) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                     DashboardDailyPhotoCard(
                         store: dailyPhotoStore,
-                        onCapture: onOpenDailyPhoto
+                        onOpenArchive: onOpenDailyPhoto,
+                        onCapture: onCaptureDailyPhoto
                     )
 
                     DashboardScanArchiveCard(scans: snapshot.scans)
@@ -263,18 +630,6 @@ struct RoutineDashboardView: View {
             }
             .id(DashboardSectionID.scans)
             .dashboardReveal(isVisible: hasAppeared, delay: 0.44)
-
-            DashboardRailSection(
-                eyebrow: "Advanced Layer",
-                title: "Deeper reports when you want them",
-                subtitle: "Premium should feel like more resolution, not a louder app."
-            ) {
-                DashboardPremiumCard {
-                    showingPremium = true
-                }
-            }
-            .id(DashboardSectionID.premium)
-            .dashboardReveal(isVisible: hasAppeared, delay: 0.50)
         }
     }
 
@@ -326,7 +681,7 @@ private struct DashboardWelcomeHeader: View {
     let onOpenAccount: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
             HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
                 AIscendBadge(
                     title: dateLabel,
@@ -337,48 +692,40 @@ private struct DashboardWelcomeHeader: View {
                 Spacer(minLength: AIscendTheme.Spacing.small)
 
                 Button(action: onOpenStreaks) {
-                    HStack(spacing: AIscendTheme.Spacing.xSmall) {
-                        Image(systemName: checkedInToday ? "checkmark.seal.fill" : "flame.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
-
-                        Text("\(streakDays)d")
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
-                    }
-                    .padding(.horizontal, AIscendTheme.Spacing.small)
-                    .padding(.vertical, AIscendTheme.Spacing.xSmall)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.88))
-                    )
-                    .overlay(
-                        Capsule(style: .continuous)
-                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                    AIscendStatChip(
+                        title: checkedInToday ? "Streak protected" : "Live streak",
+                        value: "\(streakDays)d",
+                        symbol: checkedInToday ? "checkmark.seal.fill" : "flame.fill",
+                        accent: checkedInToday ? .mint : .dawn
                     )
                 }
                 .buttonStyle(.plain)
 
                 Button(action: onOpenAccount) {
-                    Text(initials)
-                        .font(.system(size: 13, weight: .bold, design: .default))
-                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                        .frame(width: 42, height: 42)
-                        .background(
-                            Circle()
-                                .fill(RoutineAccent.sky.gradient.opacity(0.25))
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(AIscendTheme.Colors.accentGlow.opacity(0.34), lineWidth: 1)
-                        )
+                    ZStack {
+                        Circle()
+                            .fill(RoutineAccent.sky.gradient.opacity(0.20))
+
+                        Text(initials)
+                            .font(.system(size: 13, weight: .bold, design: .default))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    }
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Circle()
+                            .stroke(AIscendTheme.Colors.accentGlow.opacity(0.34), lineWidth: 1)
+                    )
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Open account")
             }
 
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                Text("Today")
+                    .aiscendTextStyle(.eyebrow, color: AIscendTheme.Colors.accentGlow)
+
                 Text(greeting)
-                    .font(.system(size: 38, weight: .bold, design: .default))
+                    .font(.system(size: 40, weight: .bold, design: .default))
                     .foregroundStyle(AIscendTheme.Colors.textPrimary)
                     .lineLimit(2)
 
@@ -406,13 +753,12 @@ private struct DashboardCommandDeckCard: View {
 
     var body: some View {
         let chartState = DashboardScoreboardState(snapshot: snapshot, window: window)
-        let selection = chartState.selection(for: selectedIndex)
 
         DashboardGlassCard(tone: .hero) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: AIscendTheme.Spacing.mediumLarge) {
-                        dashboardIntro
+                    HStack(alignment: .top, spacing: AIscendTheme.Spacing.mediumLarge) {
+                        heroIntro
 
                         Spacer(minLength: AIscendTheme.Spacing.medium)
 
@@ -420,31 +766,96 @@ private struct DashboardCommandDeckCard: View {
                     }
 
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                        dashboardIntro
+                        heroIntro
                         dashboardWindowToggle
                     }
                 }
 
-                DashboardHeroMetricRow(state: chartState)
+                ViewThatFits(in: .horizontal) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendStatChip(
+                            title: "Tier",
+                            value: snapshot.tier,
+                            symbol: "crown.fill",
+                            accent: .sky
+                        )
+                        AIscendStatChip(
+                            title: "Progress",
+                            value: progressLabel,
+                            symbol: "checkmark.seal.fill",
+                            accent: .mint
+                        )
+                        AIscendStatChip(
+                            title: "Archive",
+                            value: scanCountLabel,
+                            symbol: "camera.aperture",
+                            accent: .dawn
+                        )
+                    }
 
-                DashboardInsightBanner(
-                    title: chartState.liftBannerText,
-                    symbol: "sparkles"
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        AIscendStatChip(
+                            title: "Tier",
+                            value: snapshot.tier,
+                            symbol: "crown.fill",
+                            accent: .sky
+                        )
+                        AIscendStatChip(
+                            title: "Progress",
+                            value: progressLabel,
+                            symbol: "checkmark.seal.fill",
+                            accent: .mint
+                        )
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                    DashboardHeroMetricRow(state: chartState)
+
+                    DashboardInsightBanner(
+                        title: chartState.liftBannerText,
+                        symbol: "arrow.up.right"
+                    )
+
+                    DashboardForecastChart(
+                        state: chartState,
+                        selection: chartState.selection(for: selectedIndex),
+                        selectedIndex: $selectedIndex
+                    )
+                    .frame(height: 290)
+
+                    DashboardChartComparisonBanner(
+                        title: snapshot.percentile <= 50
+                        ? "Tracking in the top \(snapshot.percentile)% of current reads"
+                        : "Ahead of \(100 - snapshot.percentile)% of current reads",
+                        subtitle: chartState.statusBannerText
+                    )
+
+                    DashboardCompactMetricRow(state: chartState)
+                }
+                .padding(AIscendTheme.Spacing.large)
+                .background(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(Color.black.opacity(0.24))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.04),
+                                            AIscendTheme.Colors.accentPrimary.opacity(0.10),
+                                            Color.clear
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                        )
                 )
-
-                DashboardForecastChart(
-                    state: chartState,
-                    selection: selection,
-                    selectedIndex: $selectedIndex
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
                 )
-                .frame(height: 352)
-
-                DashboardInsightBanner(
-                    title: chartState.statusBannerText,
-                    symbol: "chart.line.uptrend.xyaxis"
-                )
-
-                DashboardCompactMetricRow(state: chartState)
 
                 DashboardScoreCTA(
                     isPremiumUnlocked: isPremiumUnlocked,
@@ -454,22 +865,23 @@ private struct DashboardCommandDeckCard: View {
                     onOpenHistory: onOpenHistory,
                     onOpenUpgrade: onOpenUpgrade
                 )
-
-                Button(action: onOpenHistory) {
-                    AIscendButtonLabel(title: "View Full History", leadingSymbol: "clock.arrow.circlepath")
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .secondary))
             }
         }
     }
 
-    private var dashboardIntro: some View {
+    private var heroIntro: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-            Text("Last report")
-                .aiscendTextStyle(.sectionTitle)
+            AIscendBadge(
+                title: "Today's next best move",
+                symbol: "sparkles",
+                style: .accent
+            )
+
+            Text(snapshot.heroStatement)
+                .aiscendTextStyle(.screenTitle, color: AIscendTheme.Colors.textPrimary)
 
             Text("\(scanCountLabel) on file • \(progressLabel) routine complete")
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
         }
     }
 
@@ -681,7 +1093,7 @@ private struct DashboardScoreboardState {
                 )
             } else {
                 predicted = dashboardApplyUplift(
-                    future[index - actualCount] ?? target,
+                    future[index - actualCount],
                     lastActual: normalizedActuals.last ?? Double(snapshot.score),
                     target: target
                 )
@@ -729,7 +1141,7 @@ private struct DashboardScoreboardState {
                 )
             } else {
                 predicted = dashboardApplyUplift(
-                    future[index - actualCount] ?? target,
+                    future[index - actualCount],
                     lastActual: normalizedActuals.last ?? Double(snapshot.score),
                     target: target
                 )
@@ -839,23 +1251,24 @@ private struct DashboardInsightBanner: View {
                 .foregroundStyle(AIscendTheme.Colors.accentGlow)
 
             Text(title)
-                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textPrimary)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
                 .lineLimit(2)
 
             Spacer(minLength: 0)
         }
         .padding(.horizontal, AIscendTheme.Spacing.medium)
-        .padding(.vertical, 14)
+        .padding(.vertical, 13)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(Color.black.opacity(0.26))
+                .fill(Color.black.opacity(0.34))
                 .overlay(
                     RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.06),
-                                    AIscendTheme.Colors.accentPrimary.opacity(0.10),
+                                    Color.white.opacity(0.04),
+                                    AIscendTheme.Colors.accentPrimary.opacity(0.16),
                                     Color.clear
                                 ],
                                 startPoint: .topLeading,
@@ -920,8 +1333,8 @@ private struct DashboardHeroMetricCard: View {
                 .foregroundStyle(style == .accent ? Color.white.opacity(0.74) : AIscendTheme.Colors.textMuted)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .padding(AIscendTheme.Spacing.mediumLarge)
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .leading)
+        .padding(AIscendTheme.Spacing.medium)
         .background(background)
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
@@ -936,12 +1349,12 @@ private struct DashboardHeroMetricCard: View {
         switch style {
         case .neutral:
             shape
-                .fill(Color.black.opacity(0.28))
+                .fill(Color.black.opacity(0.34))
                 .overlay(
                     shape.fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.05),
+                                Color.white.opacity(0.04),
                                 Color.clear
                             ],
                             startPoint: .topLeading,
@@ -954,6 +1367,7 @@ private struct DashboardHeroMetricCard: View {
                 .fill(
                     LinearGradient(
                         colors: [
+                            Color(hex: "A855F7"),
                             AIscendTheme.Colors.accentSoft,
                             AIscendTheme.Colors.accentPrimary
                         ],
@@ -1021,12 +1435,153 @@ private struct DashboardCompactMetricCard: View {
         .padding(AIscendTheme.Spacing.mediumLarge)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(Color.black.opacity(0.24))
+                .fill(Color.black.opacity(0.30))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.03),
+                                    accent.opacity(0.10),
+                                    Color.clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
+    }
+}
+
+private struct DashboardChartComparisonBanner: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                .frame(width: 30, height: 30)
+                .background(Color.white.opacity(0.06), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(subtitle)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(Color.black.opacity(0.34))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct DashboardChartPlotSurface: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(hex: "0B0A10"))
+
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.025),
+                            AIscendTheme.Colors.accentPrimary.opacity(0.08),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            VStack(spacing: 0) {
+                ForEach(0..<4, id: \.self) { index in
+                    if index != 0 {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.05))
+                            .frame(height: 1)
+                    }
+
+                    if index < 3 {
+                        Spacer()
+                    }
+                }
+            }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 10)
+        }
+    }
+}
+
+private struct DashboardChartFocusOverlay: View {
+    let point: CGPoint
+    let plotFrame: CGRect
+    let value: String
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 999, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.accentGlow.opacity(0.02),
+                            AIscendTheme.Colors.accentGlow.opacity(0.22),
+                            AIscendTheme.Colors.accentGlow.opacity(0.02)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 2, height: plotFrame.height - 8)
+                .offset(x: point.x - 1, y: plotFrame.minY + 4)
+
+            Circle()
+                .fill(AIscendTheme.Colors.accentGlow.opacity(0.30))
+                .frame(width: 90, height: 90)
+                .blur(radius: 18)
+                .position(x: point.x, y: point.y)
+
+            Circle()
+                .fill(Color(hex: "A855F7"))
+                .frame(width: 18, height: 18)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: 4)
+                )
+                .position(x: point.x, y: point.y)
+
+            Circle()
+                .fill(.white)
+                .frame(width: 8, height: 8)
+                .position(x: point.x, y: point.y)
+
+            DashboardChartValuePill(value: value)
+                .position(
+                    x: min(max(point.x, plotFrame.minX + 48), plotFrame.maxX - 48),
+                    y: max(plotFrame.minY + 16, point.y - 34)
+                )
+        }
+        .allowsHitTesting(false)
     }
 }
 
@@ -1042,7 +1597,7 @@ private struct DashboardForecastChart: View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
             HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Score timeline")
+                    Text("Score / Time")
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
@@ -1071,28 +1626,8 @@ private struct DashboardForecastChart: View {
             Chart {
                 if let highlightedEntry {
                     RuleMark(x: .value("Selection", highlightedEntry.index))
-                        .foregroundStyle(Color.white.opacity(selectedIndex == nil ? 0.10 : 0.18))
-                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 6]))
-                }
-
-                ForEach(state.entries) { entry in
-                    if let actual = entry.actual {
-                        AreaMark(
-                            x: .value("Index", entry.index),
-                            y: .value("Score", actual)
-                        )
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [
-                                    AIscendTheme.Colors.accentPrimary.opacity(0.22),
-                                    AIscendTheme.Colors.accentPrimary.opacity(0.03)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                    }
+                        .foregroundStyle(AIscendTheme.Colors.accentGlow.opacity(selectedIndex == nil ? 0.10 : 0.18))
+                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 6]))
                 }
 
                 ForEach(state.entries) { entry in
@@ -1102,8 +1637,26 @@ private struct DashboardForecastChart: View {
                             y: .value("Score", actual)
                         )
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(AIscendTheme.Colors.accentSoft)
-                        .lineStyle(StrokeStyle(lineWidth: 3.2, lineCap: .round, lineJoin: .round))
+                        .foregroundStyle(AIscendTheme.Colors.accentPrimary.opacity(0.22))
+                        .lineStyle(StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+
+                        LineMark(
+                            x: .value("Index", entry.index),
+                            y: .value("Score", actual)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [
+                                    AIscendTheme.Colors.accentGlow,
+                                    AIscendTheme.Colors.accentSoft,
+                                    Color(hex: "7C3AED")
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .lineStyle(StrokeStyle(lineWidth: 3.4, lineCap: .round, lineJoin: .round))
                     }
 
                     if let predicted = entry.predicted {
@@ -1112,33 +1665,20 @@ private struct DashboardForecastChart: View {
                             y: .value("Score", predicted)
                         )
                         .interpolationMethod(.catmullRom)
-                        .foregroundStyle(AIscendTheme.Colors.accentGlow.opacity(0.42))
-                        .lineStyle(StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round, dash: [7, 6]))
+                        .foregroundStyle(AIscendTheme.Colors.accentGlow.opacity(0.52))
+                        .lineStyle(StrokeStyle(lineWidth: 2.3, lineCap: .round, lineJoin: .round, dash: [6, 6]))
                     }
-                }
-
-                if let highlightedEntry,
-                   let highlightedValue = highlightedEntry.displayedValue {
-                    PointMark(
-                        x: .value("Index", highlightedEntry.index),
-                        y: .value("Score", highlightedValue)
-                    )
-                    .symbolSize(240)
-                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
-                    .annotation(position: .top, spacing: 12) {
-                        DashboardChartValuePill(value: highlightedValue.formattedScore)
-                    }
-
-                    PointMark(
-                        x: .value("Index", highlightedEntry.index),
-                        y: .value("Score", highlightedValue)
-                    )
-                    .symbolSize(88)
-                    .foregroundStyle(.white)
                 }
             }
             .chartLegend(.hidden)
             .chartYScale(domain: state.yDomain)
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .background {
+                        DashboardChartPlotSurface()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
             .chartXAxis {
                 AxisMarks(values: state.xAxisLabelIndices) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0))
@@ -1154,74 +1694,61 @@ private struct DashboardForecastChart: View {
                     }
                 }
             }
-            .chartYAxis {
-                AxisMarks(position: .leading, values: state.yTicks) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                        .foregroundStyle(Color.white.opacity(0.07))
-                    AxisTick(stroke: StrokeStyle(lineWidth: 0))
-
-                    AxisValueLabel {
-                        if let score = value.as(Double.self),
-                           state.emphasizedYTicks.contains(where: { abs($0 - score) < 0.001 }) {
-                            Text(score.formattedScore)
-                                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                .foregroundStyle(Color.white.opacity(0.48))
-                        }
-                    }
-                }
-            }
+            .chartYAxis(.hidden)
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle()
-                        .fill(Color.clear)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onChanged { value in
-                                    let plotFrame = geometry[proxy.plotAreaFrame]
-                                    let xPosition = value.location.x - plotFrame.origin.x
-                                    guard xPosition >= 0, xPosition <= plotFrame.size.width else {
-                                        return
-                                    }
+                    let plotFrame = proxy.plotFrame.map { geometry[$0] }
 
-                                    guard let index = proxy.value(atX: xPosition, as: Int.self) else {
-                                        return
-                                    }
+                    ZStack(alignment: .topLeading) {
+                        if let plotFrame,
+                           let highlightedEntry,
+                           let highlightedValue = highlightedEntry.displayedValue,
+                           let point = chartPoint(
+                            for: highlightedEntry,
+                            value: highlightedValue,
+                            proxy: proxy,
+                            plotFrame: plotFrame
+                           ) {
+                            DashboardChartFocusOverlay(
+                                point: point,
+                                plotFrame: plotFrame,
+                                value: highlightedValue.formattedScore
+                            )
+                        }
 
-                                    selectedIndex = state.closestIndex(to: index)
-                                }
-                                .onEnded { _ in
-                                    selectedIndex = nil
-                                }
-                        )
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        guard let plotFrame else {
+                                            return
+                                        }
+
+                                        let xPosition = value.location.x - plotFrame.origin.x
+                                        guard xPosition >= 0, xPosition <= plotFrame.size.width else {
+                                            return
+                                        }
+
+                                        guard let index = proxy.value(atX: xPosition, as: Int.self) else {
+                                            return
+                                        }
+
+                                        selectedIndex = state.closestIndex(to: index)
+                                    }
+                                    .onEnded { _ in
+                                        selectedIndex = nil
+                                    }
+                            )
+                    }
                 }
             }
             .padding(.horizontal, AIscendTheme.Spacing.medium)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
-                    HStack(spacing: AIscendTheme.Spacing.large) {
-                        DashboardLegendDot(title: "Actual", color: AIscendTheme.Colors.accentGlow)
-                        DashboardLegendDot(title: "Forecast", color: AIscendTheme.Colors.accentGlow.opacity(0.42))
-                    }
-
-                    Spacer(minLength: AIscendTheme.Spacing.small)
-
-                    Text(selectedIndex == nil ? "Touch and hold to inspect the line." : "Release to return to the latest read.")
-                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
-                }
-
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                    HStack(spacing: AIscendTheme.Spacing.large) {
-                        DashboardLegendDot(title: "Actual", color: AIscendTheme.Colors.accentGlow)
-                        DashboardLegendDot(title: "Forecast", color: AIscendTheme.Colors.accentGlow.opacity(0.42))
-                    }
-
-                    Text(selectedIndex == nil ? "Touch and hold to inspect the line." : "Release to return to the latest read.")
-                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
-                }
-            }
+            Text(selectedIndex == nil ? "Hold anywhere on the graph to inspect the latest movement." : "Release to return to the current read.")
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
             .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
             .padding(.bottom, AIscendTheme.Spacing.mediumLarge)
         }
@@ -1242,29 +1769,52 @@ private struct DashboardForecastChart: View {
         return state.lastActualEntry ?? state.entries.last
     }
 
+    private func chartPoint(
+        for entry: DashboardScoreEntry,
+        value: Double,
+        proxy: ChartProxy,
+        plotFrame: CGRect
+    ) -> CGPoint? {
+        guard let xPosition = proxy.position(forX: entry.index),
+              let yPosition = proxy.position(forY: value) else {
+            return nil
+        }
+
+        return CGPoint(
+            x: plotFrame.origin.x + xPosition,
+            y: plotFrame.origin.y + yPosition
+        )
+    }
+
     private var chartBackground: some View {
         ZStack {
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
-                .fill(Color.black.opacity(0.34))
+                .fill(Color(hex: "09090D"))
 
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.05),
-                            AIscendTheme.Colors.accentPrimary.opacity(0.12),
-                            Color.black.opacity(0.18)
+                            Color.white.opacity(0.04),
+                            Color(hex: "201136").opacity(0.94),
+                            Color(hex: "09090D")
                         ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
                 )
 
             Circle()
-                .fill(AIscendTheme.Colors.accentGlow.opacity(0.22))
-                .frame(width: 210, height: 210)
-                .blur(radius: 34)
-                .offset(x: 118, y: -104)
+                .fill(AIscendTheme.Colors.accentGlow.opacity(0.18))
+                .frame(width: 240, height: 240)
+                .blur(radius: 44)
+                .offset(x: 120, y: -118)
+
+            Circle()
+                .fill(Color.white.opacity(0.06))
+                .frame(width: 140, height: 140)
+                .blur(radius: 40)
+                .offset(x: 28, y: -74)
         }
     }
 }
@@ -1396,14 +1946,14 @@ private struct DashboardActionDeck: View {
     let onSelect: (DashboardQuickAction) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
             HStack {
-                Text("Quick jumps")
+                Text("Navigation")
                     .aiscendTextStyle(.sectionTitle)
 
                 Spacer(minLength: 0)
 
-                Text("Tap once to move the board")
+                Text("Jump straight to the area you want")
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
             }
 
@@ -1423,7 +1973,7 @@ private struct DashboardActionDeck: View {
                                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
                             }
                             .frame(width: 148, alignment: .topLeading)
-                            .frame(minHeight: 124, alignment: .topLeading)
+                            .frame(minHeight: 132, alignment: .topLeading)
                             .padding(AIscendTheme.Spacing.mediumLarge)
                         }
                         .buttonStyle(DashboardActionDeckButtonStyle())
@@ -1535,11 +2085,15 @@ private struct DashboardPulseCard: View {
         .padding(AIscendTheme.Spacing.mediumLarge)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(AIscendTheme.Colors.secondaryBackground.opacity(0.9))
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(Color.white.opacity(0.025))
+                )
         )
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .stroke(accent.tint.opacity(0.26), lineWidth: 1)
+                .stroke(accent.tint.opacity(0.24), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.18), radius: 14, x: 0, y: 10)
     }
@@ -1666,14 +2220,15 @@ private struct DashboardActionDeckButtonStyle: ButtonStyle {
 }
 
 private struct DashboardRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isVisible: Bool
     let delay: Double
 
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 18)
-            .animation(.easeOut(duration: 0.48).delay(delay), value: isVisible)
+            .offset(y: isVisible || reduceMotion ? 0 : 18)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.48).delay(delay), value: isVisible)
     }
 }
 

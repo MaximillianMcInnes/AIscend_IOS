@@ -111,10 +111,19 @@ final class DailyPhotoStore: ObservableObject {
     }
 
     func recentEntries(limit: Int = 3) -> [DailyPhotoEntry] {
-        entriesByDay.values
-            .sorted(by: { $0.ymd > $1.ymd })
+        sortedEntries()
             .prefix(limit)
             .map { $0 }
+    }
+
+    func sortedEntries() -> [DailyPhotoEntry] {
+        entriesByDay.values.sorted { lhs, rhs in
+            if lhs.ymd == rhs.ymd {
+                return lhs.createdAt > rhs.createdAt
+            }
+
+            return lhs.ymd > rhs.ymd
+        }
     }
 
     func currentStreakDays(now: Date = .now) -> Int {

@@ -18,6 +18,556 @@ struct AppShellView: View {
     }
 }
 
+struct RoutineCleanSlateView: View {
+    @Bindable var model: AppModel
+    @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var badgeManager: BadgeManager
+    let onOpenCheckIn: () -> Void
+    let onOpenConsistency: () -> Void
+
+    private var nextStep: RoutineStep? {
+        model.nextOpenStep
+    }
+
+    private var heroTitle: String {
+        nextStep?.title ?? "Routine complete"
+    }
+
+    private var heroSubtitle: String {
+        nextStep?.detail ?? "The routine is intentionally quiet right now so this tab can stay clean and focused."
+    }
+
+    var body: some View {
+        ZStack {
+            AIscendBackdrop()
+            DashboardAmbientLayer()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendBadge(
+                            title: "Clean slate",
+                            symbol: "sparkles",
+                            style: .accent
+                        )
+
+                        Text("Routine")
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                        Text("One focused surface for the day. The old blueprint is hidden so this tab stays calm instead of turning into another dense dashboard.")
+                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                        AIscendBadge(
+                            title: "Next move",
+                            symbol: "scope",
+                            style: .neutral
+                        )
+
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                            Text(heroTitle)
+                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                            Text(heroSubtitle)
+                                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                            HStack {
+                                Text("Today's completion")
+                                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                                Spacer()
+
+                                Text(model.progressLabel)
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                            }
+
+                            RoutineSlateProgressBar(progress: model.progress)
+                        }
+
+                        HStack(spacing: AIscendTheme.Spacing.small) {
+                            RoutineSlateMetric(
+                                title: "Live streak",
+                                value: "\(dailyCheckInStore.snapshot.currentStreak)d",
+                                detail: dailyCheckInStore.hasCheckedInToday ? "Protected today" : "Still open",
+                                accent: .sky
+                            )
+
+                            RoutineSlateMetric(
+                                title: "Badges",
+                                value: "\(badgeManager.earnedCount)",
+                                detail: badgeManager.earnedBadges.first?.title ?? "No markers yet",
+                                accent: .mint
+                            )
+                        }
+
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                            Button(action: onOpenCheckIn) {
+                                AIscendButtonLabel(
+                                    title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
+                                    leadingSymbol: "calendar.badge.checkmark"
+                                )
+                            }
+                            .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                            Button(action: onOpenConsistency) {
+                                AIscendButtonLabel(title: "Open Streaks", leadingSymbol: "flame.fill")
+                            }
+                            .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                        }
+                    }
+                    .padding(AIscendTheme.Spacing.xLarge)
+                    .background(
+                        RoundedRectangle(cornerRadius: 34, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color(hex: "111114").opacity(0.96),
+                                        AIscendTheme.Colors.secondaryBackground.opacity(0.98)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 34, style: .continuous)
+                            .stroke(AIscendTheme.Colors.accentGlow.opacity(0.18), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.42), radius: 28, x: 0, y: 18)
+                }
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+    }
+}
+
+struct MoreHubView: View {
+    @Bindable var model: AppModel
+    @Bindable var session: AuthSessionStore
+    @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var badgeManager: BadgeManager
+    @ObservedObject var notificationManager: NotificationManager
+
+    @State private var showingDailyCheckIn = false
+    @State private var showingStreaks = false
+
+    private var displayName: String {
+        session.user?.displayName ?? model.profile.displayName
+    }
+
+    private var subtitle: String {
+        session.user?.subtitle ?? "Your private AIscend workspace"
+    }
+
+    private var initials: String {
+        session.user?.initials ?? String(model.profile.displayName.prefix(2)).uppercased()
+    }
+
+    var body: some View {
+        ZStack {
+            AIscendBackdrop()
+            DashboardAmbientLayer()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                    profileHeroCard
+                    profileSignalStrip
+                    profileActionsCard
+
+                    if let errorMessage = session.errorMessage {
+                        profileMessageCard(title: "Auth status", message: errorMessage)
+                    } else if let configurationMessage = session.configurationMessage {
+                        profileMessageCard(title: "Firebase setup", message: configurationMessage)
+                    }
+                }
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .task {
+            await notificationManager.refreshAuthorizationStatus()
+        }
+        .sheet(isPresented: $showingDailyCheckIn) {
+            DailyCheckInView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                isPremium: badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked }),
+                onComplete: {},
+                onDismiss: { showingDailyCheckIn = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingStreaks) {
+            StreaksView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                onOpenCheckIn: {
+                    showingStreaks = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        showingDailyCheckIn = true
+                    }
+                },
+                onDismiss: { showingStreaks = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var profileHeroCard: some View {
+        AIscendEditorialHeroCard(
+            eyebrow: "Profile",
+            title: displayName,
+            subtitle: subtitle,
+            accent: .sky
+        ) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                HStack(spacing: AIscendTheme.Spacing.mediumLarge) {
+                    ProfileAvatarView(
+                        localURL: model.profileAvatarURL,
+                        remoteURL: session.user?.photoURL,
+                        initials: initials
+                    )
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                        Text(session.providerSummary)
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+                        Text(model.profile.intention)
+                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                            .lineLimit(3)
+                    }
+                }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        AIscendStatChip(
+                            title: "Mode",
+                            value: model.profile.focusTrack.title,
+                            symbol: model.profile.focusTrack.symbol,
+                            accent: .sky
+                        )
+
+                        AIscendStatChip(
+                            title: "Wake",
+                            value: model.profile.wakeLabel,
+                            symbol: "alarm.fill",
+                            accent: .dawn
+                        )
+
+                        AIscendStatChip(
+                            title: "Anchors",
+                            value: "\(max(model.profile.anchors.count, 1))",
+                            symbol: "sparkles.rectangle.stack",
+                            accent: .mint
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendStatChip(
+                            title: "Mode",
+                            value: model.profile.focusTrack.title,
+                            symbol: model.profile.focusTrack.symbol,
+                            accent: .sky
+                        )
+
+                        AIscendStatChip(
+                            title: "Wake",
+                            value: model.profile.wakeLabel,
+                            symbol: "alarm.fill",
+                            accent: .dawn
+                        )
+
+                        AIscendStatChip(
+                            title: "Anchors",
+                            value: "\(max(model.profile.anchors.count, 1))",
+                            symbol: "sparkles.rectangle.stack",
+                            accent: .mint
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var profileSignalStrip: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                ProfileSignalCard(
+                    title: "Streak",
+                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
+                    detail: dailyCheckInStore.hasCheckedInToday ? "Protected" : "Open",
+                    accent: .dawn
+                )
+
+                ProfileSignalCard(
+                    title: "Badges",
+                    value: "\(badgeManager.earnedCount)",
+                    detail: badgeManager.earnedBadges.first?.title ?? "Quiet progress",
+                    accent: .mint
+                )
+
+                ProfileSignalCard(
+                    title: "Reminders",
+                    value: "\(notificationManager.preferences.enabledCount)",
+                    detail: notificationManager.authorizationState.badgeTitle,
+                    accent: .sky
+                )
+            }
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                ProfileSignalCard(
+                    title: "Streak",
+                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
+                    detail: dailyCheckInStore.hasCheckedInToday ? "Protected" : "Open",
+                    accent: .dawn
+                )
+
+                ProfileSignalCard(
+                    title: "Badges",
+                    value: "\(badgeManager.earnedCount)",
+                    detail: badgeManager.earnedBadges.first?.title ?? "Quiet progress",
+                    accent: .mint
+                )
+
+                ProfileSignalCard(
+                    title: "Reminders",
+                    value: "\(notificationManager.preferences.enabledCount)",
+                    detail: notificationManager.authorizationState.badgeTitle,
+                    accent: .sky
+                )
+            }
+        }
+    }
+
+    private var profileActionsCard: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+            Text("Quick actions")
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+            VStack(spacing: 0) {
+                ProfileActionRow(
+                    title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
+                    detail: "Close today's loop and protect the streak.",
+                    symbol: "calendar.badge.checkmark",
+                    accent: .sky,
+                    action: { showingDailyCheckIn = true }
+                )
+
+                ProfileActionDivider()
+
+                ProfileActionRow(
+                    title: "Open Streaks",
+                    detail: "See consistency, badges, and momentum.",
+                    symbol: "flame.fill",
+                    accent: .dawn,
+                    action: { showingStreaks = true }
+                )
+
+                ProfileActionDivider()
+
+                ProfileActionRow(
+                    title: "Refine onboarding",
+                    detail: "Adjust your routine setup and goals.",
+                    symbol: "slider.horizontal.3",
+                    accent: .mint,
+                    action: { model.resetOnboarding() }
+                )
+
+                ProfileActionDivider()
+
+                ProfileActionRow(
+                    title: "Reset today's progress",
+                    detail: "Clear the daily routine completion state.",
+                    symbol: "arrow.counterclockwise",
+                    accent: .sky,
+                    action: { model.resetRoutineProgress() }
+                )
+
+                ProfileActionDivider()
+
+                ProfileActionRow(
+                    title: "Sign out",
+                    detail: "Disconnect the current session.",
+                    symbol: "rectangle.portrait.and.arrow.right",
+                    accent: .dawn,
+                    destructive: true,
+                    action: { session.signOut() }
+                )
+            }
+            .background(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceMuted.opacity(0.94))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+            )
+        }
+    }
+
+    private func profileMessageCard(title: String, message: String) -> some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+            AIscendBadge(title: title, symbol: "info.circle.fill", style: .neutral)
+
+            Text(message)
+                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+        }
+        .padding(AIscendTheme.Spacing.large)
+        .aiscendPanel(.muted)
+    }
+}
+
+private struct RoutineSlateMetric: View {
+    let title: String
+    let value: String
+    let detail: String
+    let accent: RoutineAccent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Text(detail)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(accent.tint.opacity(0.18), lineWidth: 1)
+        )
+    }
+}
+
+private struct RoutineSlateProgressBar: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.6))
+
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.accentGlow,
+                                AIscendTheme.Colors.accentPrimary
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: max(14, geometry.size.width * progress))
+            }
+        }
+        .frame(height: 10)
+    }
+}
+
+private struct ProfileSignalCard: View {
+    let title: String
+    let value: String
+    let detail: String
+    let accent: RoutineAccent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+            Text(detail)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
+        .padding(.vertical, AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.86))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(accent.tint.opacity(0.16), lineWidth: 1)
+        )
+    }
+}
+
+private struct ProfileActionRow: View {
+    let title: String
+    let detail: String
+    let symbol: String
+    let accent: RoutineAccent
+    var destructive: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: symbol, accent: accent, size: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .foregroundStyle(destructive ? AIscendTheme.Colors.error : AIscendTheme.Colors.textPrimary)
+
+                    Text(detail)
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                }
+
+                Spacer(minLength: AIscendTheme.Spacing.small)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.textMuted)
+            }
+            .padding(.horizontal, AIscendTheme.Spacing.large)
+            .padding(.vertical, AIscendTheme.Spacing.mediumLarge)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ProfileActionDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(AIscendTheme.Colors.borderSubtle)
+            .frame(height: 1)
+            .padding(.horizontal, AIscendTheme.Spacing.large)
+    }
+}
+
 struct RoutineBlueprintView: View {
     @Bindable var model: AppModel
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
@@ -40,7 +590,7 @@ struct RoutineBlueprintView: View {
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
-                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -101,30 +651,26 @@ struct RoutineBlueprintView: View {
     }
 
     private var blueprintHero: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            HStack {
-                AIscendBadge(
-                    title: "Blueprint",
-                    symbol: "square.grid.2x2.fill",
-                    style: .accent
-                )
+        AIscendEditorialHeroCard(
+            eyebrow: "Routine blueprint",
+            title: "Your current operating structure",
+            subtitle: "AIScend is applying the following routine model. Refine onboarding any time you want to alter the tempo or intent.",
+            accent: .sky
+        ) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendStatChip(title: "Focus", value: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, accent: .sky)
+                    AIscendStatChip(title: "Wake", value: model.profile.wakeLabel, symbol: "alarm.fill", accent: .dawn)
+                    AIscendStatChip(title: "Anchors", value: "\(max(model.profile.anchors.count, 1)) active", symbol: "sparkles.rectangle.stack", accent: .mint)
+                }
 
-                Spacer()
-            }
-
-            AIscendSectionHeader(
-                title: "The current operating structure",
-                subtitle: "AIScend is applying the following routine model. Refine onboarding any time you want to alter the tempo or intent.",
-                prominence: .hero
-            )
-
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                AIscendCapsule(title: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, isActive: true)
-                AIscendCapsule(title: model.profile.wakeLabel, symbol: "alarm.fill", isActive: false)
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    AIscendStatChip(title: "Focus", value: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, accent: .sky)
+                    AIscendStatChip(title: "Wake", value: model.profile.wakeLabel, symbol: "alarm.fill", accent: .dawn)
+                    AIscendStatChip(title: "Anchors", value: "\(max(model.profile.anchors.count, 1)) active", symbol: "sparkles.rectangle.stack", accent: .mint)
+                }
             }
         }
-        .padding(AIscendTheme.Spacing.xLarge)
-        .aiscendPanel(.hero)
     }
 
     private var intentionPanel: some View {
@@ -205,24 +751,11 @@ struct RoutineBlueprintView: View {
                         )
                     }
 
-                    ForEach(section.steps) { step in
-                        HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
-                            AIscendIconOrb(symbol: step.symbol, accent: step.accent, size: 40)
-
-                            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
-                                Text(step.title)
-                                    .aiscendTextStyle(.cardTitle)
-
-                                Text(step.detail)
-                                    .aiscendTextStyle(.body)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(AIscendTheme.Spacing.medium)
-                        .background(
-                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
-                                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.68))
+                    ForEach(Array(section.steps.enumerated()), id: \.element.id) { index, step in
+                        routineStepRow(
+                            step: step,
+                            index: index + 1,
+                            isLast: index == section.steps.count - 1
                         )
                     }
                 }
@@ -246,6 +779,55 @@ struct RoutineBlueprintView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AIscendTheme.Spacing.mediumLarge)
         .aiscendPanel(.muted)
+    }
+
+    private func routineStepRow(step: RoutineStep, index: Int, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle()
+                        .fill(step.accent.gradient.opacity(0.24))
+                        .frame(width: 34, height: 34)
+
+                    Text("\(index)")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                }
+
+                if !isLast {
+                    RoundedRectangle(cornerRadius: 999, style: .continuous)
+                        .fill(step.accent.tint.opacity(0.22))
+                        .frame(width: 2, height: 34)
+                        .padding(.top, AIscendTheme.Spacing.xSmall)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendIconOrb(symbol: step.symbol, accent: step.accent, size: 38)
+
+                    Text(step.title)
+                        .aiscendTextStyle(.cardTitle)
+                }
+
+                Text(step.detail)
+                    .aiscendTextStyle(.body)
+            }
+
+            Spacer()
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.68))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(Color.white.opacity(0.02))
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
     }
 }
 
@@ -287,7 +869,7 @@ struct AccountView: View {
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
-                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -335,17 +917,12 @@ struct AccountView: View {
     }
 
     private var userPanel: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            HStack {
-                AIscendBadge(
-                    title: "Profile",
-                    symbol: "person.crop.rectangle.stack.fill",
-                    style: .accent
-                )
-
-                Spacer()
-            }
-
+        AIscendEditorialHeroCard(
+            eyebrow: "Profile hub",
+            title: session.user?.displayName ?? model.profile.displayName,
+            subtitle: session.user?.subtitle ?? "Local profile",
+            accent: .sky
+        ) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 HStack(spacing: AIscendTheme.Spacing.mediumLarge) {
                     ProfileAvatarView(
@@ -355,14 +932,20 @@ struct AccountView: View {
                     )
 
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
-                        Text(session.user?.displayName ?? model.profile.displayName)
-                            .aiscendTextStyle(.sectionTitle)
-
-                        Text(session.user?.subtitle ?? "Local profile")
-                            .aiscendTextStyle(.body)
-
                         Text(session.providerSummary)
                             .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: AIscendTheme.Spacing.small) {
+                                AIscendStatChip(title: "Mode", value: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, accent: .sky)
+                                AIscendStatChip(title: "Wake", value: model.profile.wakeLabel, symbol: "alarm.fill", accent: .dawn)
+                            }
+
+                            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                                AIscendStatChip(title: "Mode", value: model.profile.focusTrack.title, symbol: model.profile.focusTrack.symbol, accent: .sky)
+                                AIscendStatChip(title: "Wake", value: model.profile.wakeLabel, symbol: "alarm.fill", accent: .dawn)
+                            }
+                        }
                     }
                 }
 
@@ -404,11 +987,11 @@ struct AccountView: View {
                         .frame(minHeight: 108)
                         .padding(AIscendTheme.Spacing.small)
                         .background(
-                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                                 .fill(AIscendTheme.Colors.fieldFill)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
                         )
                 }
@@ -419,8 +1002,6 @@ struct AccountView: View {
                 }
             }
         }
-        .padding(AIscendTheme.Spacing.xLarge)
-        .aiscendPanel(.hero)
     }
 
     private var routineStatePanel: some View {

@@ -9,6 +9,491 @@ import PhotosUI
 import SwiftUI
 import UIKit
 
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+
+protocol ScanAnalysisServiceProtocol: Sendable {
+    func analyze(
+        frontImageData: Data,
+        sideImageData: Data,
+        email: String?,
+        userID: String?,
+        accessLevel: ScanResultsAccess
+    ) async throws -> PersistedScanRecord
+}
+
+enum ScanAnalysisError: LocalizedError, Equatable {
+    case missingBackendBaseURL
+    case invalidResponse
+    case backend(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingBackendBaseURL:
+            "Add `AISCEND_API_BASE_URL` to the app configuration before submitting scan captures."
+        case .invalidResponse:
+            "AIScend returned an unreadable scan response. Please try again."
+        case .backend(let message):
+            message
+        }
+    }
+}
+
+actor ScanAnalysisService: ScanAnalysisServiceProtocol {
+    private let configuration: AIscendChatConfiguration
+    private let session: URLSession
+    private let decoder: JSONDecoder
+
+    init(
+        configuration: AIscendChatConfiguration = .live,
+        session: URLSession = .shared
+    ) {
+        self.configuration = configuration
+        self.session = session
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        self.decoder = decoder
+    }
+
+    func analyze(
+        frontImageData: Data,
+        sideImageData: Data,
+        email: String?,
+        userID: String?,
+        accessLevel: ScanResultsAccess
+    ) async throws -> PersistedScanRecord {
+        guard let baseURL = configuration.backendBaseURL else {
+            throw ScanAnalysisError.missingBackendBaseURL
+        }
+
+        let scanPath = configuration.scanAnalyzePath
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let endpoint = baseURL.appendingPathComponent(scanPath.isEmpty ? "scan/analyze" : scanPath)
+        let identity = try? await authenticatedIdentity(forceRefresh: true)
+        let boundary = "Boundary-\(UUID().uuidString)"
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 120
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let idToken = identity?.idToken?.trimmedNonEmpty {
+            request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        request.httpBody = multipartBody(
+            boundary: boundary,
+            frontImageData: frontImageData,
+            sideImageData: sideImageData,
+            email: identity?.email ?? email,
+            userID: identity?.userID ?? userID,
+            accessLevel: accessLevel
+        )
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ScanAnalysisError.invalidResponse
+        }
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw ScanAnalysisError.backend(
+                backendMessage(from: data, statusCode: httpResponse.statusCode)
+            )
+        }
+
+        return try parseResult(
+            from: data,
+            email: identity?.email ?? email,
+            accessLevel: accessLevel
+        )
+    }
+}
+
+private extension ScanAnalysisService {
+    struct AuthenticatedIdentity {
+        let userID: String?
+        let email: String?
+        let idToken: String?
+    }
+
+    func multipartBody(
+        boundary: String,
+        frontImageData: Data,
+        sideImageData: Data,
+        email: String?,
+        userID: String?,
+        accessLevel: ScanResultsAccess
+    ) -> Data {
+        var body = Data()
+
+        body.appendMultipartField(named: "access", value: accessLevel.rawValue, boundary: boundary)
+        body.appendMultipartField(named: "scanType", value: accessLevel.rawValue, boundary: boundary)
+        body.appendMultipartField(named: "source", value: "scan-flow", boundary: boundary)
+
+        if let email = email?.trimmedNonEmpty {
+            body.appendMultipartField(named: "email", value: email, boundary: boundary)
+        }
+
+        if let userID = userID?.trimmedNonEmpty {
+            body.appendMultipartField(named: "userId", value: userID, boundary: boundary)
+        }
+
+        body.appendMultipartFile(
+            named: "frontImage",
+            filename: "front.jpg",
+            mimeType: "image/jpeg",
+            data: frontImageData,
+            boundary: boundary
+        )
+        body.appendMultipartFile(
+            named: "sideImage",
+            filename: "side.jpg",
+            mimeType: "image/jpeg",
+            data: sideImageData,
+            boundary: boundary
+        )
+        body.appendUTF8("--\(boundary)--\r\n")
+
+        return body
+    }
+
+    func parseResult(
+        from data: Data,
+        email: String?,
+        accessLevel: ScanResultsAccess
+    ) throws -> PersistedScanRecord {
+        if let directRecord = try? decoder.decode(PersistedScanRecord.self, from: data),
+           directRecord.isDisplayable
+        {
+            return normalized(directRecord, email: email, accessLevel: accessLevel)
+        }
+
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ScanAnalysisError.invalidResponse
+        }
+
+        let candidates: [Any?] = [
+            object,
+            object["result"],
+            object["scan"],
+            object["scanResult"],
+            object["scan_result"],
+            object["data"],
+            object["analysis"]
+        ]
+
+        for candidate in candidates {
+            if let record = try decodeRecord(from: candidate, rootObject: object),
+               record.isDisplayable
+            {
+                return normalized(record, email: email, accessLevel: accessLevel)
+            }
+        }
+
+        throw ScanAnalysisError.invalidResponse
+    }
+
+    func decodeRecord(from raw: Any?, rootObject: [String: Any]) throws -> PersistedScanRecord? {
+        guard let raw else {
+            return nil
+        }
+
+        if let dictionary = raw as? [String: Any] {
+            if let directData = try? jsonData(from: dictionary),
+               let directRecord = try? decoder.decode(PersistedScanRecord.self, from: directData),
+               directRecord.isDisplayable
+            {
+                return directRecord
+            }
+
+            let payload = try decodePayload(
+                from: dictionary["payload"]
+                    ?? dictionary["scanPayload"]
+                    ?? dictionary["payloadJSON"]
+                    ?? dictionary["scan_payload"]
+                    ?? dictionary
+            )
+
+            guard let payload else {
+                return nil
+            }
+
+            let meta = try decodeMeta(
+                from: dictionary["meta"]
+                    ?? dictionary["metadata"]
+                    ?? dictionary["scanMeta"]
+                    ?? dictionary["scan_meta"]
+                    ?? dictionary
+            ) ?? ScanResultMeta()
+
+            let savedAt = dateValue(
+                for: ["savedAt", "saved_at", "createdAt", "created_at", "updatedAt", "updated_at"],
+                in: dictionary
+            ) ?? dateValue(
+                for: ["savedAt", "saved_at", "createdAt", "created_at"],
+                in: rootObject
+            )
+
+            return PersistedScanRecord(
+                payload: payload,
+                meta: meta,
+                savedAt: savedAt
+            )
+        }
+
+        if let jsonString = raw as? String,
+           let jsonData = jsonString.data(using: .utf8)
+        {
+            if let directRecord = try? decoder.decode(PersistedScanRecord.self, from: jsonData),
+               directRecord.isDisplayable
+            {
+                return directRecord
+            }
+
+            if let payload = try? decoder.decode(ScanPayload.self, from: jsonData) {
+                return PersistedScanRecord(
+                    payload: payload,
+                    meta: ScanResultMeta(),
+                    savedAt: nil
+                )
+            }
+        }
+
+        return nil
+    }
+
+    func decodePayload(from raw: Any?) throws -> ScanPayload? {
+        guard let raw else {
+            return nil
+        }
+
+        if let dictionary = raw as? [String: Any] {
+            let data = try jsonData(from: dictionary)
+            return try? decoder.decode(ScanPayload.self, from: data)
+        }
+
+        if let jsonString = raw as? String,
+           let data = jsonString.data(using: .utf8)
+        {
+            return try? decoder.decode(ScanPayload.self, from: data)
+        }
+
+        return nil
+    }
+
+    func decodeMeta(from raw: Any?) throws -> ScanResultMeta? {
+        guard let raw else {
+            return nil
+        }
+
+        if let dictionary = raw as? [String: Any] {
+            let data = try jsonData(from: dictionary)
+            return try? decoder.decode(ScanResultMeta.self, from: data)
+        }
+
+        if let jsonString = raw as? String,
+           let data = jsonString.data(using: .utf8)
+        {
+            return try? decoder.decode(ScanResultMeta.self, from: data)
+        }
+
+        return nil
+    }
+
+    func jsonData(from value: Any) throws -> Data {
+        guard JSONSerialization.isValidJSONObject(value) else {
+            throw ScanAnalysisError.invalidResponse
+        }
+
+        return try JSONSerialization.data(withJSONObject: value, options: [])
+    }
+
+    func normalized(
+        _ result: PersistedScanRecord,
+        email: String?,
+        accessLevel: ScanResultsAccess
+    ) -> PersistedScanRecord {
+        var normalized = result
+
+        if normalized.meta.email?.trimmedNonEmpty == nil {
+            normalized.meta.email = email
+        }
+
+        if normalized.meta.type?.trimmedNonEmpty == nil {
+            normalized.meta.type = accessLevel.rawValue
+        }
+
+        if normalized.meta.source?.trimmedNonEmpty == nil {
+            normalized.meta.source = "scan-flow"
+        }
+
+        if normalized.savedAt == nil {
+            normalized.savedAt = .now
+        }
+
+        return normalized
+    }
+
+    func dateValue(for keys: [String], in object: [String: Any]) -> Date? {
+        for key in keys {
+            guard let value = object[key] else {
+                continue
+            }
+
+            if let date = dateValue(from: value) {
+                return date
+            }
+        }
+
+        return nil
+    }
+
+    func dateValue(from raw: Any) -> Date? {
+        if let date = raw as? Date {
+            return date
+        }
+
+        if let string = raw as? String {
+            let isoFormatter = ISO8601DateFormatter()
+            if let date = isoFormatter.date(from: string) {
+                return date
+            }
+
+            if let timeInterval = Double(string) {
+                return dateValue(from: timeInterval)
+            }
+        }
+
+        if let number = raw as? NSNumber {
+            return dateValue(from: number.doubleValue)
+        }
+
+        if let dictionary = raw as? [String: Any] {
+            if let seconds = (dictionary["_seconds"] as? NSNumber)?.doubleValue {
+                return Date(timeIntervalSince1970: seconds)
+            }
+
+            if let seconds = (dictionary["seconds"] as? NSNumber)?.doubleValue {
+                return Date(timeIntervalSince1970: seconds)
+            }
+        }
+
+        return nil
+    }
+
+    func dateValue(from timeInterval: Double) -> Date {
+        let normalizedInterval = timeInterval > 10_000_000_000 ? timeInterval / 1000 : timeInterval
+        return Date(timeIntervalSince1970: normalizedInterval)
+    }
+
+    func backendMessage(from data: Data, statusCode: Int) -> String {
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let message = stringValue(
+                for: ["detail", "error", "message", "reason"],
+                in: object
+            )
+            if let message, !message.isEmpty {
+                return message
+            }
+        }
+
+        switch statusCode {
+        case 400:
+            return "AIScend could not validate those scan captures."
+        case 401, 403:
+            return "Your session needs to be refreshed before AIScend can submit the scan."
+        case 404:
+            return "The scan endpoint could not be reached from this build."
+        case 413:
+            return "Those photos are too large to upload right now."
+        default:
+            return "AIScend could not finish the scan right now."
+        }
+    }
+
+    func stringValue(for keys: [String], in data: [String: Any]) -> String? {
+        for key in keys {
+            if let value = data[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func authenticatedIdentity(forceRefresh: Bool) async throws -> AuthenticatedIdentity? {
+        #if canImport(FirebaseAuth)
+        guard let user = Auth.auth().currentUser else {
+            return nil
+        }
+
+        let idToken = try await fetchIDToken(for: user, forceRefresh: forceRefresh)
+        return AuthenticatedIdentity(
+            userID: user.uid,
+            email: user.email,
+            idToken: idToken
+        )
+        #else
+        return nil
+        #endif
+    }
+
+    #if canImport(FirebaseAuth)
+    func fetchIDToken(for user: FirebaseAuth.User, forceRefresh: Bool) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            user.getIDTokenForcingRefresh(forceRefresh) { token, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let token {
+                    continuation.resume(returning: token)
+                } else {
+                    continuation.resume(throwing: ScanAnalysisError.invalidResponse)
+                }
+            }
+        }
+    }
+    #endif
+}
+
+private extension Data {
+    mutating func appendUTF8(_ string: String) {
+        append(Data(string.utf8))
+    }
+
+    mutating func appendMultipartField(named name: String, value: String, boundary: String) {
+        appendUTF8("--\(boundary)\r\n")
+        appendUTF8("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+        appendUTF8("\(value)\r\n")
+    }
+
+    mutating func appendMultipartFile(
+        named name: String,
+        filename: String,
+        mimeType: String,
+        data: Data,
+        boundary: String
+    ) {
+        appendUTF8("--\(boundary)\r\n")
+        appendUTF8("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
+        appendUTF8("Content-Type: \(mimeType)\r\n\r\n")
+        append(data)
+        appendUTF8("\r\n")
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 struct ScanCaptureFlowView: View {
     let session: AuthSessionStore
     let onOpenRoutine: () -> Void
@@ -19,8 +504,9 @@ struct ScanCaptureFlowView: View {
     @ObservedObject private var badgeManager: BadgeManager
     @ObservedObject private var dailyCheckInStore: DailyCheckInStore
     @ObservedObject private var notificationManager: NotificationManager
+    private let analysisService: ScanAnalysisServiceProtocol
 
-    @State private var phase: Phase = .capture
+    @State private var phase: Phase = .frontCapture
     @State private var frontPickerItem: PhotosPickerItem?
     @State private var sidePickerItem: PhotosPickerItem?
     @State private var frontPreview: UIImage?
@@ -39,6 +525,7 @@ struct ScanCaptureFlowView: View {
         badgeManager: BadgeManager,
         dailyCheckInStore: DailyCheckInStore,
         notificationManager: NotificationManager,
+        analysisService: ScanAnalysisServiceProtocol = ScanAnalysisService(),
         onOpenRoutine: @escaping () -> Void = {},
         onOpenChat: @escaping () -> Void = {},
         onReturnHome: @escaping () -> Void = {},
@@ -49,6 +536,7 @@ struct ScanCaptureFlowView: View {
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
         self.onDismiss = onDismiss
+        self.analysisService = analysisService
         self._badgeManager = ObservedObject(wrappedValue: badgeManager)
         self._dailyCheckInStore = ObservedObject(wrappedValue: dailyCheckInStore)
         self._notificationManager = ObservedObject(wrappedValue: notificationManager)
@@ -88,8 +576,14 @@ struct ScanCaptureFlowView: View {
     @ViewBuilder
     private var content: some View {
         switch phase {
-        case .capture:
-            captureExperience
+        case .frontCapture:
+            captureExperience(for: .front, review: false)
+        case .frontReview:
+            captureExperience(for: .front, review: true)
+        case .sideCapture:
+            captureExperience(for: .side, review: false)
+        case .sideReview:
+            captureExperience(for: .side, review: true)
         case .processing:
             ScanProcessingExperience(
                 progress: progress,
@@ -111,15 +605,15 @@ struct ScanCaptureFlowView: View {
         }
     }
 
-    private var captureExperience: some View {
+    private func captureExperience(for angle: CaptureAngle, review: Bool) -> some View {
         GeometryReader { geometry in
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                     topBar(topInset: geometry.safeAreaInsets.top)
                     sessionSummaryCard
-                    captureCards
+                    captureStageSummaryCard(for: angle, review: review)
+                    captureStageCard(for: angle, review: review)
                     captureProtocolCard
-                    swipeCard
 
                     if let importMessage {
                         Text(importMessage)
@@ -134,6 +628,25 @@ struct ScanCaptureFlowView: View {
 
     private func topBar(topInset: CGFloat) -> some View {
         HStack {
+            if canGoBack {
+                Button(action: navigateBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                        .frame(width: 40, height: 40)
+                        .background(
+                            Circle()
+                                .fill(Color(hex: "10141B").opacity(0.86))
+                                .overlay(Circle().fill(.ultraThinMaterial).opacity(0.55))
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
             AIscendBadge(
                 title: "Guided scan",
                 symbol: "sparkles.rectangle.stack.fill",
@@ -167,7 +680,7 @@ struct ScanCaptureFlowView: View {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 AIscendSectionHeader(
                     title: "Build a clean front and side read",
-                    subtitle: "Import both angles, keep expression neutral, and let AIScend turn the capture into the same guided reveal flow you outlined."
+                    subtitle: "Confirm the front angle first, replace it if needed, then repeat for the side profile before AIScend sends both captures to the API."
                 )
 
                 HStack(spacing: AIscendTheme.Spacing.small) {
@@ -183,48 +696,73 @@ struct ScanCaptureFlowView: View {
                     )
                 }
 
-                Text("Fresh scan results open automatically after processing, and the guarded auto-save path only runs once for new scan-flow records.")
+                Text("Once the API response comes back, the result drops straight into the existing guided reveal and archive pipeline.")
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
             }
         }
     }
 
-    private var captureCards: some View {
-        VStack(spacing: AIscendTheme.Spacing.small) {
-            ScanImportCard(
-                title: "Front capture",
-                subtitle: "Straight-on face, level camera, even light.",
-                buttonTitle: frontPreview == nil ? "Choose front photo" : "Replace front photo",
-                image: frontPreview,
-                symbol: "person.crop.square",
-                isBusy: isImportingFront
-            ) {
-                PhotosPicker(selection: $frontPickerItem, matching: .images) {
-                    AIscendButtonLabel(
-                        title: frontPreview == nil ? "Choose front photo" : "Replace front photo",
-                        leadingSymbol: "photo.badge.plus"
-                    )
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .primary))
-                .disabled(isImporting)
-            }
+    private func captureStageSummaryCard(for angle: CaptureAngle, review: Bool) -> some View {
+        DashboardGlassCard {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                DashboardSectionHeading(
+                    eyebrow: angle.stepEyebrow(review: review),
+                    title: angle.stepTitle(review: review),
+                    subtitle: angle.stepSubtitle(review: review)
+                )
 
-            ScanImportCard(
-                title: "Side profile",
-                subtitle: "Clear profile line, relaxed jaw, same lighting.",
-                buttonTitle: sidePreview == nil ? "Choose side photo" : "Replace side photo",
-                image: sidePreview,
-                symbol: "person.crop.rectangle",
-                isBusy: isImportingSide
-            ) {
-                PhotosPicker(selection: $sidePickerItem, matching: .images) {
-                    AIscendButtonLabel(
-                        title: sidePreview == nil ? "Choose side photo" : "Replace side photo",
-                        leadingSymbol: "photo.badge.plus"
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    ScanFlowProgressPill(
+                        title: "Front",
+                        state: angle == .front ? .current : .complete
+                    )
+                    ScanFlowProgressPill(
+                        title: "Side",
+                        state: angle == .side ? .current : (angle == .front ? .upcoming : .complete)
+                    )
+                    ScanFlowProgressPill(
+                        title: "Analyze",
+                        state: .upcoming
                     )
                 }
-                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+            }
+        }
+    }
+
+    private func captureStageCard(for angle: CaptureAngle, review: Bool) -> some View {
+        ScanImportCard(
+            title: angle.cardTitle,
+            subtitle: angle.cardSubtitle,
+            buttonTitle: angle.buttonTitle(previewExists: preview(for: angle) != nil),
+            image: preview(for: angle),
+            symbol: angle.symbol,
+            isBusy: isImporting(angle)
+        ) {
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                if review {
+                    Button(action: { confirmCapture(for: angle) }) {
+                        AIscendButtonLabel(
+                            title: angle.confirmButtonTitle,
+                            leadingSymbol: angle == .front ? "checkmark.circle.fill" : "arrow.up.circle.fill"
+                        )
+                    }
+                    .buttonStyle(AIscendButtonStyle(variant: .primary))
+                    .disabled(isImporting)
+                }
+
+                PhotosPicker(selection: pickerBinding(for: angle), matching: .images) {
+                    AIscendButtonLabel(
+                        title: review ? angle.replaceButtonTitle : angle.buttonTitle(previewExists: preview(for: angle) != nil),
+                        leadingSymbol: review ? "arrow.triangle.2.circlepath" : "photo.badge.plus"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: review ? .secondary : .primary))
                 .disabled(isImporting)
+
+                if review {
+                    Text(angle.reviewHint)
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                }
             }
         }
     }
@@ -235,7 +773,7 @@ struct ScanCaptureFlowView: View {
                 DashboardSectionHeading(
                     eyebrow: "Protocol",
                     title: "Capture checklist",
-                    subtitle: "This follows the same premium-feel scan flow: controlled inputs, guided processing, then a structured multi-page result reveal."
+                    subtitle: "The review flow is simple on purpose: cleaner inputs now mean fewer bad reads once the API starts scoring both angles."
                 )
 
                 VStack(spacing: AIscendTheme.Spacing.small) {
@@ -261,29 +799,6 @@ struct ScanCaptureFlowView: View {
         }
     }
 
-    private var swipeCard: some View {
-        DashboardGlassCard(tone: .premium) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
-                AIscendSectionHeader(
-                    eyebrow: "Start",
-                    title: "Swipe to begin the scan",
-                    subtitle: canStartScan
-                        ? "Both angles are loaded. The next step is the premium processing stage and then the guided breakdown."
-                        : "Add both the front and side photos first."
-                )
-
-                SwipeToStartControl(
-                    disabled: !canStartScan,
-                    label: canStartScan ? "Slide to start scan" : "Front and side photos required",
-                    onComplete: startProcessing
-                )
-
-                Text("Tip: this currently generates the guided result locally, then hands it into the existing results pipeline, including the guarded archive save.")
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
-            }
-        }
-    }
-
     private var isPremiumUnlocked: Bool {
         badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked })
     }
@@ -292,8 +807,63 @@ struct ScanCaptureFlowView: View {
         isImportingFront || isImportingSide
     }
 
-    private var canStartScan: Bool {
-        frontData != nil && sideData != nil && !isImporting
+    private var canGoBack: Bool {
+        switch phase {
+        case .frontCapture, .processing, .results:
+            return false
+        case .frontReview, .sideCapture, .sideReview:
+            return true
+        }
+    }
+
+    private func preview(for angle: CaptureAngle) -> UIImage? {
+        switch angle {
+        case .front:
+            frontPreview
+        case .side:
+            sidePreview
+        }
+    }
+
+    private func isImporting(_ angle: CaptureAngle) -> Bool {
+        switch angle {
+        case .front:
+            isImportingFront
+        case .side:
+            isImportingSide
+        }
+    }
+
+    private func pickerBinding(for angle: CaptureAngle) -> Binding<PhotosPickerItem?> {
+        switch angle {
+        case .front:
+            $frontPickerItem
+        case .side:
+            $sidePickerItem
+        }
+    }
+
+    private func navigateBack() {
+        switch phase {
+        case .frontCapture, .processing, .results:
+            break
+        case .frontReview:
+            phase = .frontCapture
+        case .sideCapture:
+            phase = .frontReview
+        case .sideReview:
+            phase = .sideCapture
+        }
+    }
+
+    private func confirmCapture(for angle: CaptureAngle) {
+        switch angle {
+        case .front:
+            importMessage = "Front capture confirmed. Upload the side profile next."
+            phase = .sideCapture
+        case .side:
+            startProcessing()
+        }
     }
 
     private func scanMetric(title: String, value: String, detail: String) -> some View {
@@ -351,20 +921,18 @@ struct ScanCaptureFlowView: View {
                 if sideProfile {
                     sidePreview = image
                     sideData = compressed
+                    phase = .sideReview
                 } else {
                     frontPreview = image
                     frontData = compressed
+                    phase = .frontReview
                 }
 
                 setImporting(false, sideProfile: sideProfile)
 
                 importMessage = sideProfile
-                    ? "Side profile loaded. Add the front capture to continue."
-                    : "Front capture loaded. Add the side profile to continue."
-
-                if canStartScan {
-                    importMessage = "Both captures are loaded. Swipe to begin the scan."
-                }
+                    ? "Side profile loaded. Confirm it or replace it before AIScend submits the scan."
+                    : "Front capture loaded. Confirm it or replace it before moving to the side view."
             }
         } catch {
             await MainActor.run {
@@ -383,8 +951,7 @@ struct ScanCaptureFlowView: View {
     }
 
     private func startProcessing() {
-        guard canStartScan,
-              let frontData,
+        guard let frontData,
               let sideData else {
             return
         }
@@ -399,24 +966,33 @@ struct ScanCaptureFlowView: View {
 
         let accessLevel: ScanResultsAccess = isPremiumUnlocked ? .premium : .free
         let email = session.user?.email
+        let userID = session.user?.id
 
         processingTask = Task { @MainActor in
             do {
-                try await animateProgress(to: 8, duration: 0.45)
-                try await animateProgress(to: 16, duration: 0.40)
-                try await animateProgress(to: 28, duration: 0.55)
-                try await animateProgress(to: 40, duration: 0.55)
-                try await animateProgress(to: 55, duration: 0.65)
-                try await animateProgress(to: 70, duration: 0.65)
-                try await animateProgress(to: 82, duration: 0.55)
-                try await animateProgress(to: 92, duration: 0.50)
-                try await animateProgress(to: 98, duration: 0.45)
+                try await animateProgress(to: 12, duration: 0.36)
+                try await animateProgress(to: 24, duration: 0.34)
 
-                let result = try makeResult(
+                async let remoteResult = analysisService.analyze(
+                    frontImageData: frontData,
+                    sideImageData: sideData,
+                    email: email,
+                    userID: userID,
+                    accessLevel: accessLevel
+                )
+
+                try await animateProgress(to: 42, duration: 0.45)
+                try await animateProgress(to: 60, duration: 0.55)
+                try await animateProgress(to: 78, duration: 0.60)
+                try await animateProgress(to: 92, duration: 0.70)
+
+                let analyzedResult = try await remoteResult
+                let result = try finalizedResult(
+                    analyzedResult,
                     frontData: frontData,
                     sideData: sideData,
-                    accessLevel: accessLevel,
-                    email: email
+                    email: email,
+                    accessLevel: accessLevel
                 )
 
                 try await animateProgress(to: 100, duration: 0.24)
@@ -427,8 +1003,10 @@ struct ScanCaptureFlowView: View {
             } catch is CancellationError {
                 processingTask = nil
             } catch {
-                importMessage = "The scan could not be prepared right now. Please try again."
-                phase = .capture
+                importMessage = error.localizedDescription.isEmpty
+                    ? "The scan could not be submitted right now. Please try again."
+                    : error.localizedDescription
+                phase = .sideReview
                 processingTask = nil
             }
         }
@@ -437,15 +1015,22 @@ struct ScanCaptureFlowView: View {
     private func cancelProcessing() {
         processingTask?.cancel()
         processingTask = nil
-        phase = .capture
+        phase = .sideReview
         progress = 0
-        importMessage = "Scan cancelled before results were generated."
+        importMessage = "Scan cancelled before the API submission finished."
     }
 
     private func resetToCapture() {
         generatedResult = nil
         progress = 0
-        phase = .capture
+        importMessage = nil
+        frontPickerItem = nil
+        sidePickerItem = nil
+        frontPreview = nil
+        sidePreview = nil
+        frontData = nil
+        sideData = nil
+        phase = .frontCapture
     }
 
     private func animateProgress(to target: Double, duration: TimeInterval) async throws {
@@ -466,55 +1051,163 @@ struct ScanCaptureFlowView: View {
         progress = clampedTarget
     }
 
-    private func makeResult(
+    private func finalizedResult(
+        _ apiResult: PersistedScanRecord,
         frontData: Data,
         sideData: Data,
-        accessLevel: ScanResultsAccess,
-        email: String?
+        email: String?,
+        accessLevel: ScanResultsAccess
     ) throws -> PersistedScanRecord {
         let frontURL = try ScanCaptureAssetStore.store(data: frontData, prefix: "front")
         let sideURL = try ScanCaptureAssetStore.store(data: sideData, prefix: "side")
 
-        var result = accessLevel == .premium
-            ? PersistedScanRecord.previewPremium
-            : PersistedScanRecord.previewFree
+        var result = apiResult
 
-        let scoreOffset = Double(((frontData.count % 11) + (sideData.count % 9)) % 7) - 3
-        let overall = clamp(result.overallScore + (scoreOffset * 0.8), min: 54, max: 94)
-        let potential = clamp(overall + 8 + Double(sideData.count % 3), min: overall + 4, max: 97)
-        let eyes = clamp(overall + 2 - Double(frontData.count % 5), min: 48, max: 96)
-        let skin = clamp(overall - 3 + Double(frontData.count % 4), min: 44, max: 94)
-        let jaw = clamp(overall + Double(sideData.count % 4), min: 48, max: 96)
-        let side = clamp(overall + 1 - Double(sideData.count % 3), min: 46, max: 95)
+        if result.meta.frontUrl?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            result.meta.frontUrl = frontURL.absoluteString
+        }
 
-        result.payload.scores.overall = overall
-        result.payload.scores.potential = potential
-        result.payload.scores.eyes = eyes
-        result.payload.scores.skin = skin
-        result.payload.scores.jaw = jaw
-        result.payload.scores.side = side
+        if result.meta.sideUrl?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            result.meta.sideUrl = sideURL.absoluteString
+        }
 
-        result.meta.frontUrl = frontURL.absoluteString
-        result.meta.sideUrl = sideURL.absoluteString
-        result.meta.email = email
-        result.meta.type = accessLevel.rawValue
-        result.meta.scanId = nil
-        result.meta.source = "scan-flow"
-        result.savedAt = .now
+        if result.meta.email?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            result.meta.email = email
+        }
+
+        if result.meta.type?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            result.meta.type = accessLevel.rawValue
+        }
+
+        if result.meta.source?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true {
+            result.meta.source = "scan-flow"
+        }
+
+        if result.savedAt == nil {
+            result.savedAt = .now
+        }
 
         return result
-    }
-
-    private func clamp(_ value: Double, min: Double, max: Double) -> Double {
-        Swift.max(min, Swift.min(max, value))
     }
 }
 
 private extension ScanCaptureFlowView {
     enum Phase {
-        case capture
+        case frontCapture
+        case frontReview
+        case sideCapture
+        case sideReview
         case processing
         case results
+    }
+}
+
+private extension ScanCaptureFlowView {
+    enum CaptureAngle {
+        case front
+        case side
+
+        var symbol: String {
+            switch self {
+            case .front:
+                "person.crop.square"
+            case .side:
+                "person.crop.rectangle"
+            }
+        }
+
+        var cardTitle: String {
+            switch self {
+            case .front:
+                "Front capture"
+            case .side:
+                "Side profile"
+            }
+        }
+
+        var cardSubtitle: String {
+            switch self {
+            case .front:
+                "Straight-on face, level camera, even light."
+            case .side:
+                "Clear profile line, relaxed jaw, same lighting."
+            }
+        }
+
+        func stepEyebrow(review: Bool) -> String {
+            switch (self, review) {
+            case (.front, false):
+                "Step 1 of 3"
+            case (.front, true):
+                "Review front"
+            case (.side, false):
+                "Step 2 of 3"
+            case (.side, true):
+                "Review side"
+            }
+        }
+
+        func stepTitle(review: Bool) -> String {
+            switch (self, review) {
+            case (.front, false):
+                "Upload your front photo"
+            case (.front, true):
+                "Confirm the front capture"
+            case (.side, false):
+                "Upload your side profile"
+            case (.side, true):
+                "Confirm the side photo and submit"
+            }
+        }
+
+        func stepSubtitle(review: Bool) -> String {
+            switch (self, review) {
+            case (.front, false):
+                "Start with the straight-on angle. Once it looks clean, you can lock it in or replace it."
+            case (.front, true):
+                "Check framing, posture, and lighting before moving on to the side profile."
+            case (.side, false):
+                "Match the same lighting, keep the jaw relaxed, and line up a clean profile."
+            case (.side, true):
+                "The second confirmation is the last stop before both photos are pushed to the API."
+            }
+        }
+
+        func buttonTitle(previewExists: Bool) -> String {
+            switch self {
+            case .front:
+                previewExists ? "Replace front photo" : "Upload front photo"
+            case .side:
+                previewExists ? "Replace side photo" : "Upload side photo"
+            }
+        }
+
+        var replaceButtonTitle: String {
+            switch self {
+            case .front:
+                "Replace front photo"
+            case .side:
+                "Replace side photo"
+            }
+        }
+
+        var confirmButtonTitle: String {
+            switch self {
+            case .front:
+                "Use front photo"
+            case .side:
+                "Push scan to API"
+            }
+        }
+
+        var reviewHint: String {
+            switch self {
+            case .front:
+                "If anything feels off, replace this angle now so the side step starts from a clean baseline."
+            case .side:
+                "Submitting now keeps the guided results flow intact and sends the confirmed pair to the backend."
+            }
+        }
     }
 }
 
@@ -535,6 +1228,81 @@ private enum ScanCaptureAssetStore {
         let directory = baseDirectory.appendingPathComponent("ScanCaptures", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
+    }
+}
+
+private enum ScanFlowStepState {
+    case complete
+    case current
+    case upcoming
+}
+
+private struct ScanFlowProgressPill: View {
+    let title: String
+    let state: ScanFlowStepState
+
+    private var fill: Color {
+        switch state {
+        case .complete:
+            AIscendTheme.Colors.accentPrimary.opacity(0.18)
+        case .current:
+            AIscendTheme.Colors.accentGlow.opacity(0.22)
+        case .upcoming:
+            AIscendTheme.Colors.surfaceHighlight.opacity(0.58)
+        }
+    }
+
+    private var stroke: Color {
+        switch state {
+        case .complete:
+            AIscendTheme.Colors.accentGlow.opacity(0.34)
+        case .current:
+            AIscendTheme.Colors.accentGlow.opacity(0.56)
+        case .upcoming:
+            AIscendTheme.Colors.borderSubtle
+        }
+    }
+
+    private var foreground: Color {
+        switch state {
+        case .complete, .current:
+            AIscendTheme.Colors.textPrimary
+        case .upcoming:
+            AIscendTheme.Colors.textSecondary
+        }
+    }
+
+    private var iconName: String {
+        switch state {
+        case .complete:
+            "checkmark.circle.fill"
+        case .current:
+            "circle.fill"
+        case .upcoming:
+            "circle"
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: iconName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(state == .upcoming ? AIscendTheme.Colors.textMuted : AIscendTheme.Colors.accentGlow)
+
+            Text(title)
+                .aiscendTextStyle(.caption, color: foreground)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .fill(fill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .stroke(stroke, lineWidth: 1)
+        )
     }
 }
 
@@ -811,24 +1579,18 @@ private struct ScanProcessingExperience: View {
 
     private var stage: ScanProcessingStage {
         switch clampedProgress {
-        case ..<8:
+        case ..<12:
             .init(label: "Booting", subtitle: "Initializing secure scan session...")
-        case ..<16:
-            .init(label: "Loading Models", subtitle: "Loading large analysis models...")
-        case ..<28:
-            .init(label: "Optimizing Photos", subtitle: "Enhancing lighting and alignment...")
-        case ..<40:
-            .init(label: "Uploading", subtitle: "Preparing inputs for the guided read...")
-        case ..<55:
-            .init(label: "Face Detection", subtitle: "Locating key facial regions...")
-        case ..<70:
-            .init(label: "Landmarks", subtitle: "Mapping precision points across both angles...")
-        case ..<82:
-            .init(label: "Feature Analysis", subtitle: "Measuring symmetry and structure...")
+        case ..<24:
+            .init(label: "Packaging", subtitle: "Preparing the confirmed front and side captures...")
+        case ..<42:
+            .init(label: "Uploading", subtitle: "Pushing both images into the scan API...")
+        case ..<60:
+            .init(label: "Queued", subtitle: "AIScend has accepted the capture pair and started the read...")
+        case ..<78:
+            .init(label: "Analysis", subtitle: "The backend is mapping features across both angles...")
         case ..<92:
-            .init(label: "Detail Pass", subtitle: "Refining skin and shape reads...")
-        case ..<98:
-            .init(label: "Scoring", subtitle: "Generating your personalized breakdown...")
+            .init(label: "Scoring", subtitle: "Compiling the structured result payload...")
         default:
             .init(label: "Finalizing", subtitle: "Preparing your results dashboard...")
         }
@@ -880,7 +1642,7 @@ private struct ScanProcessingExperience: View {
                                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
                         )
 
-                        Text("We run the full guided scan sequence before reveal so the result feels like a deliberate flow instead of a raw dump.")
+                        Text("AIScend submits the confirmed pair first, waits for the API response, and only then opens the guided reveal.")
                             .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
                             .multilineTextAlignment(.center)
 
@@ -929,9 +1691,9 @@ private struct ScanProcessingExperience: View {
                         }
 
                         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AIscendTheme.Spacing.small) {
-                            ScanProcessingStepChip(done: clampedProgress >= 15, label: "Models loaded")
-                            ScanProcessingStepChip(done: clampedProgress >= 55, label: "Landmarks mapped")
-                            ScanProcessingStepChip(done: clampedProgress >= 82, label: "Feature scoring")
+                            ScanProcessingStepChip(done: clampedProgress >= 24, label: "Photos packaged")
+                            ScanProcessingStepChip(done: clampedProgress >= 42, label: "Upload finished")
+                            ScanProcessingStepChip(done: clampedProgress >= 78, label: "Analysis returned")
                             ScanProcessingStepChip(done: clampedProgress >= 95, label: "Results building")
                         }
 

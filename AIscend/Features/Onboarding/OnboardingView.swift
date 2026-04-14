@@ -55,67 +55,55 @@ struct OnboardingView: View {
     }
 
     private var topBar: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            HStack(alignment: .top, spacing: AIscendTheme.Spacing.mediumLarge) {
-                AIscendSectionHeader(
-                    eyebrow: "Calibration",
-                    title: "Build your operating profile.",
-                    subtitle: "This first pass defines the tone of the app: focused, controlled, and tuned to the way you want to move.",
-                    prominence: .hero
-                )
+        AIscendEditorialHeroCard(
+            eyebrow: "Calibration",
+            title: "Build your operating profile.",
+            subtitle: "This first pass defines the tone of the app: focused, controlled, and tuned to the way you want to move.",
+            accent: .sky
+        ) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendStatChip(title: "Steps", value: "\(totalSteps)", symbol: "square.grid.2x2.fill", accent: .sky)
+                    AIscendStatChip(title: "Flow", value: "Guided", symbol: "sparkles", accent: .mint)
 
-                Spacer(minLength: AIscendTheme.Spacing.medium)
+                    Spacer(minLength: AIscendTheme.Spacing.medium)
 
-                Button {
-                    session.signOut()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(AIscendTheme.Colors.surfaceHighlight)
-                            .frame(width: 46, height: 46)
-                            .overlay(
-                                Circle()
-                                    .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: AIscendTheme.Stroke.thin)
-                            )
-
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    AIscendTopBarButton(symbol: "rectangle.portrait.and.arrow.right") {
+                        session.signOut()
                     }
+                    .accessibilityLabel("Sign out")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Sign out")
-            }
 
-            if let user = session.user {
-                HStack(spacing: AIscendTheme.Spacing.medium) {
-                    ZStack {
-                        Circle()
-                            .fill(AIscendTheme.Colors.accentPrimary.opacity(0.18))
-                            .frame(width: 46, height: 46)
-                            .overlay(
-                                Circle()
-                                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.32), lineWidth: AIscendTheme.Stroke.thin)
-                            )
+                if let user = session.user {
+                    HStack(spacing: AIscendTheme.Spacing.medium) {
+                        ZStack {
+                            Circle()
+                                .fill(AIscendTheme.Colors.accentPrimary.opacity(0.18))
+                                .frame(width: 46, height: 46)
+                                .overlay(
+                                    Circle()
+                                        .stroke(AIscendTheme.Colors.accentGlow.opacity(0.32), lineWidth: AIscendTheme.Stroke.thin)
+                                )
 
-                        Text(user.initials)
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                            Text(user.initials)
+                                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                        }
+
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                            Text(user.displayName)
+                                .aiscendTextStyle(.cardTitle)
+
+                            Text(user.subtitle)
+                                .aiscendTextStyle(.secondaryBody)
+                        }
+
+                        Spacer()
+
+                        AIscendBadge(title: "Authenticated", symbol: "checkmark.shield.fill", style: .neutral)
                     }
-
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
-                        Text(user.displayName)
-                            .aiscendTextStyle(.cardTitle)
-
-                        Text(user.subtitle)
-                            .aiscendTextStyle(.secondaryBody)
-                    }
-
-                    Spacer()
-
-                    AIscendBadge(title: "Authenticated", symbol: "checkmark.shield.fill", style: .neutral)
+                    .padding(AIscendTheme.Spacing.large)
+                    .aiscendPanel(.standard)
                 }
-                .padding(AIscendTheme.Spacing.large)
-                .aiscendPanel(.standard)
             }
         }
     }

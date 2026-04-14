@@ -12,7 +12,6 @@ struct AIscendChatComposer: View {
 
     let isSending: Bool
     let isDisabled: Bool
-    let quotaLabel: String?
     let focusBinding: FocusState<Bool>.Binding
     let onSend: () -> Void
 
@@ -21,118 +20,109 @@ struct AIscendChatComposer: View {
     }
 
     var body: some View {
-        VStack(spacing: AIscendTheme.Spacing.small) {
-            HStack(spacing: AIscendTheme.Spacing.xSmall) {
-                Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
-
-                Text(quotaLabel ?? "Private advisor conversation")
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
-
-                Spacer(minLength: 0)
-            }
-
-            HStack(alignment: .bottom, spacing: AIscendTheme.Spacing.small) {
-                TextField(
-                    "Ask for strategy, refinement, or your next best move",
-                    text: $text,
-                    axis: .vertical
-                )
-                .focused(focusBinding)
-                .font(AIscendTheme.Typography.input)
-                .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                .lineLimit(1...6)
-                .submitLabel(.send)
-                .onSubmit(onSend)
-                .textInputAutocapitalization(.sentences)
-                .autocorrectionDisabled(false)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.white.opacity(0.04))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-                )
-
-                Button(action: onSend) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                sendDisabled
-                                ? LinearGradient(
-                                    colors: [
-                                        AIscendTheme.Colors.tertiaryBackground,
-                                        AIscendTheme.Colors.secondaryBackground
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                                : LinearGradient(
-                                    colors: [
-                                        AIscendTheme.Colors.accentGlow,
-                                        AIscendTheme.Colors.accentPrimary
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 52, height: 52)
-
-                        if isSending {
-                            ProgressView()
-                                .progressViewStyle(.circular)
-                                .tint(AIscendTheme.Colors.textPrimary)
-                        } else {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(
-                                    sendDisabled
-                                    ? AIscendTheme.Colors.textMuted
-                                    : AIscendTheme.Colors.textPrimary
-                                )
-                        }
-                    }
+        HStack(alignment: .bottom, spacing: AIscendTheme.Spacing.small) {
+            TextField(
+                "Ask for strategy, refinement, or your next best move",
+                text: $text,
+                axis: .vertical
+            )
+            .focused(focusBinding)
+            .font(AIscendTheme.Typography.input)
+            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+            .lineLimit(1...5)
+            .submitLabel(.send)
+            .onSubmit(onSend)
+            .textInputAutocapitalization(.sentences)
+            .autocorrectionDisabled(false)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.9))
                     .overlay(
-                        Circle()
-                            .stroke(
-                                sendDisabled
-                                ? AIscendTheme.Colors.borderSubtle
-                                : AIscendTheme.Colors.accentGlow.opacity(0.38),
-                                lineWidth: 1
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.white.opacity(0.02))
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+            )
+
+            Button(action: onSend) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            sendDisabled
+                            ? LinearGradient(
+                                colors: [
+                                    AIscendTheme.Colors.surfaceInteractive,
+                                    AIscendTheme.Colors.surfaceMuted
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
-                    )
-                    .shadow(
-                        color: sendDisabled ? .clear : AIscendTheme.Colors.accentPrimary.opacity(0.26),
-                        radius: 16,
-                        x: 0,
-                        y: 8
-                    )
+                            : LinearGradient(
+                                colors: [
+                                    AIscendTheme.Colors.accentGlow,
+                                    AIscendTheme.Colors.accentSoft,
+                                    AIscendTheme.Colors.accentPrimary
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+
+                    if isSending {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(AIscendTheme.Colors.textPrimary)
+                    } else {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(
+                                sendDisabled
+                                ? AIscendTheme.Colors.textMuted
+                                : AIscendTheme.Colors.textPrimary
+                            )
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(sendDisabled)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            sendDisabled
+                            ? AIscendTheme.Colors.borderSubtle
+                            : AIscendTheme.Colors.accentGlow.opacity(0.38),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: sendDisabled ? .clear : AIscendTheme.Colors.accentPrimary.opacity(0.22),
+                    radius: 14,
+                    x: 0,
+                    y: 8
+                )
             }
+            .buttonStyle(.plain)
+            .disabled(sendDisabled)
         }
-        .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
-        .padding(.top, AIscendTheme.Spacing.medium)
-        .padding(.bottom, AIscendTheme.Spacing.mediumLarge)
+        .padding(.horizontal, AIscendTheme.Spacing.small + 2)
+        .padding(.vertical, AIscendTheme.Spacing.small + 2)
         .background(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(AIscendChatPalette.chrome)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
                         .fill(Color.white.opacity(0.03))
                         .blur(radius: 18)
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AIscendChatPalette.surfaceBorder, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.42), radius: 24, x: 0, y: 10)
-        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.08), radius: 24, x: 0, y: 0)
+        .shadow(color: Color.black.opacity(0.34), radius: 20, x: 0, y: 10)
+        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.06), radius: 18, x: 0, y: 0)
     }
 }

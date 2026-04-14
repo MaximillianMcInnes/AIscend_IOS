@@ -18,6 +18,7 @@ struct DashboardView: View {
     var onOpenCheckIn: () -> Void = {}
     var onOpenConsistency: () -> Void = {}
     var onOpenDailyPhoto: () -> Void = {}
+    var onCaptureDailyPhoto: () -> Void = {}
     var onOpenAccount: () -> Void = {}
     var onRefine: () -> Void = {}
 
@@ -272,7 +273,8 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                     DashboardDailyPhotoCard(
                         store: dailyPhotoStore,
-                        onCapture: onOpenDailyPhoto
+                        onOpenArchive: onOpenDailyPhoto,
+                        onCapture: onCaptureDailyPhoto
                     )
 
                     DashboardScanArchiveCard(scans: snapshot.scans)

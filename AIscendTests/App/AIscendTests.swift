@@ -38,12 +38,12 @@ struct AIscendTests {
         defaults.removePersistentDomain(forName: suiteName)
 
         let model = AppModel(defaults: defaults, arguments: [])
-        model.analysisGoals = [.presentation, .tracking]
+        model.analysisGoals = [.overallAttractiveness, .symmetry]
         model.completeEntryOnboarding()
 
         let reloaded = AppModel(defaults: defaults, arguments: [])
         #expect(reloaded.hasCompletedEntryOnboarding)
-        #expect(reloaded.analysisGoals == [.presentation, .tracking])
+        #expect(reloaded.analysisGoals == [.overallAttractiveness, .symmetry])
 
         defaults.removePersistentDomain(forName: suiteName)
     }

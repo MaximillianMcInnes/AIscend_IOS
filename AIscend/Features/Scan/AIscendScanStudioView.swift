@@ -59,7 +59,7 @@ struct AIscendScanStudioView: View {
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
-                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
+                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
             }
         }
         .preferredColorScheme(.dark)
@@ -72,87 +72,154 @@ struct AIscendScanStudioView: View {
         onBeginCapture: @escaping () -> Void,
         onOpenLatestResult: @escaping () -> Void
     ) -> some View {
-        DashboardGlassCard(tone: .hero) {
+        AIscendEditorialHeroCard(
+            eyebrow: "Scan studio",
+            title: "Capture the next clean baseline",
+            subtitle: "AIScend works best when the scan cadence stays disciplined. Keep lighting stable, hit both angles, and treat each capture like calibrated input.",
+            accent: .sky
+        ) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack {
-                    AIscendBadge(
-                        title: "Scan studio",
-                        symbol: "viewfinder.circle.fill",
-                        style: .accent
-                    )
-
-                    Spacer()
-
-                    AIscendBadge(
-                        title: scanCountLabel,
-                        symbol: "camera.aperture",
-                        style: .neutral
-                    )
-                }
-
-                AIscendSectionHeader(
-                    title: "Capture the next clean baseline",
-                    subtitle: "AIScend works best when the scan cadence stays disciplined. Keep lighting stable, hit both angles, and treat each capture like calibrated input."
-                )
-
                 HStack(spacing: AIscendTheme.Spacing.small) {
-                    scanHeroMetric(
-                        title: "Current read",
-                        value: scoreLabel,
-                        detail: snapshot.tier,
-                        symbol: "waveform.path.ecg"
-                    )
-                    scanHeroMetric(
-                        title: "Focus",
-                        value: model.analysisGoalSummary,
-                        detail: "Priority variable",
-                        symbol: "scope"
-                    )
+                    AIscendStatChip(title: "Archive", value: scanCountLabel, symbol: "camera.aperture", accent: .dawn)
+                    AIscendStatChip(title: "Current read", value: "\(scoreLabel) • \(snapshot.tier)", symbol: "waveform.path.ecg", accent: .sky)
                 }
 
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    Button(action: onOpenLatestResult) {
-                        AIscendButtonLabel(title: "Open Latest Result", leadingSymbol: "sparkles.rectangle.stack.fill")
-                    }
-                    .buttonStyle(AIscendButtonStyle(variant: .primary))
+                ZStack(alignment: .bottomLeading) {
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color(hex: "161A2A"),
+                                    AIscendTheme.Colors.accentDeep.opacity(0.46),
+                                    Color(hex: "10131B")
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(height: 220)
 
-                    Button(action: onBeginCapture) {
-                        AIscendButtonLabel(title: "Start Guided Scan", leadingSymbol: "camera.aperture")
+                    Circle()
+                        .fill(AIscendTheme.Colors.accentGlow.opacity(0.36))
+                        .frame(width: 150, height: 150)
+                        .blur(radius: 28)
+                        .offset(x: 180, y: -30)
+
+                    Circle()
+                        .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
+                        .frame(width: 126, height: 126)
+                        .overlay(
+                            Circle()
+                                .stroke(style: StrokeStyle(lineWidth: 1, dash: [8, 8]))
+                                .foregroundStyle(AIscendTheme.Colors.accentGlow.opacity(0.42))
+                                .padding(18)
+                        )
+                        .overlay(
+                            Image(systemName: "viewfinder")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                        )
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, AIscendTheme.Spacing.large)
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendBadge(
+                            title: model.analysisGoalSummary,
+                            symbol: "scope",
+                            style: .neutral
+                        )
+
+                        Text("Studio preview")
+                            .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
+
+                        Text("A clean capture session creates stronger before/after context and a more trustworthy archive.")
+                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
                     }
-                    .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    .padding(AIscendTheme.Spacing.large)
                 }
 
-                Text("Fresh scan results open automatically after capture, and the latest reveal can still be revisited here anytime.")
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        Button(action: onBeginCapture) {
+                            AIscendButtonLabel(title: "Start Guided Scan", leadingSymbol: "camera.aperture")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                        Button(action: onOpenLatestResult) {
+                            AIscendButtonLabel(title: "Open Latest Result", leadingSymbol: "sparkles.rectangle.stack.fill")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    }
+
+                    VStack(spacing: AIscendTheme.Spacing.small) {
+                        Button(action: onBeginCapture) {
+                            AIscendButtonLabel(title: "Start Guided Scan", leadingSymbol: "camera.aperture")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                        Button(action: onOpenLatestResult) {
+                            AIscendButtonLabel(title: "Open Latest Result", leadingSymbol: "sparkles.rectangle.stack.fill")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    }
+                }
             }
         }
     }
 
     private var statusStrip: some View {
-        HStack(spacing: AIscendTheme.Spacing.small) {
-            scanStatTile(
-                title: "Tier",
-                value: snapshot.tier,
-                detail: "Current account read",
-                symbol: "crown.fill",
-                accent: .sky
-            )
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                scanStatTile(
+                    title: "Tier",
+                    value: snapshot.tier,
+                    detail: "Current account read",
+                    symbol: "crown.fill",
+                    accent: .sky
+                )
 
-            scanStatTile(
-                title: "Streak",
-                value: "\(snapshot.streakDays)d",
-                detail: "Calibrated consistency",
-                symbol: "flame.fill",
-                accent: .dawn
-            )
+                scanStatTile(
+                    title: "Streak",
+                    value: "\(snapshot.streakDays)d",
+                    detail: "Calibrated consistency",
+                    symbol: "flame.fill",
+                    accent: .dawn
+                )
 
-            scanStatTile(
-                title: "Cadence",
-                value: "4 / mo",
-                detail: "Recommended baseline tempo",
-                symbol: "calendar.badge.clock",
-                accent: .mint
-            )
+                scanStatTile(
+                    title: "Cadence",
+                    value: "4 / mo",
+                    detail: "Recommended baseline tempo",
+                    symbol: "calendar.badge.clock",
+                    accent: .mint
+                )
+            }
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                scanStatTile(
+                    title: "Tier",
+                    value: snapshot.tier,
+                    detail: "Current account read",
+                    symbol: "crown.fill",
+                    accent: .sky
+                )
+
+                scanStatTile(
+                    title: "Streak",
+                    value: "\(snapshot.streakDays)d",
+                    detail: "Calibrated consistency",
+                    symbol: "flame.fill",
+                    accent: .dawn
+                )
+
+                scanStatTile(
+                    title: "Cadence",
+                    value: "4 / mo",
+                    detail: "Recommended baseline tempo",
+                    symbol: "calendar.badge.clock",
+                    accent: .mint
+                )
+            }
         }
     }
 
@@ -316,14 +383,15 @@ struct AIscendScanStudioView: View {
 }
 
 private struct ScanStudioRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isVisible: Bool
     let delay: Double
 
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 18)
-            .animation(.easeOut(duration: 0.44).delay(delay), value: isVisible)
+            .offset(y: isVisible || reduceMotion ? 0 : 18)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(delay), value: isVisible)
     }
 }
 

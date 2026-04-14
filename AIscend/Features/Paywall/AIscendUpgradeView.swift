@@ -1045,14 +1045,15 @@ private struct TrustFooter: View {
 }
 
 private struct UpgradeRevealModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let isVisible: Bool
     let delay: Double
 
     func body(content: Content) -> some View {
         content
             .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 16)
-            .animation(.easeOut(duration: 0.45).delay(delay), value: isVisible)
+            .offset(y: isVisible || reduceMotion ? 0 : 16)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.45).delay(delay), value: isVisible)
     }
 }
 

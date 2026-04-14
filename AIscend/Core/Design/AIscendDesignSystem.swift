@@ -18,8 +18,8 @@ enum AIscendPanelStyle {
         case .standard:
             LinearGradient(
                 colors: [
-                    AIscendTheme.Colors.surface,
-                    AIscendTheme.Colors.cardGradientEnd.opacity(0.96)
+                    AIscendTheme.Colors.surfaceGlass,
+                    AIscendTheme.Colors.cardGradientEnd.opacity(0.98)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -28,7 +28,7 @@ enum AIscendPanelStyle {
             LinearGradient(
                 colors: [
                     AIscendTheme.Colors.elevatedSurface,
-                    AIscendTheme.Colors.cardGradientStart
+                    AIscendTheme.Colors.surfaceInteractive
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -37,6 +37,7 @@ enum AIscendPanelStyle {
             LinearGradient(
                 colors: [
                     AIscendTheme.Colors.cardGradientStart,
+                    AIscendTheme.Colors.accentDeep.opacity(0.52),
                     AIscendTheme.Colors.cardGradientEnd
                 ],
                 startPoint: .topLeading,
@@ -45,7 +46,7 @@ enum AIscendPanelStyle {
         case .muted:
             LinearGradient(
                 colors: [
-                    AIscendTheme.Colors.tertiaryBackground.opacity(0.96),
+                    AIscendTheme.Colors.surfaceMuted.opacity(0.96),
                     AIscendTheme.Colors.secondaryBackground.opacity(0.94)
                 ],
                 startPoint: .topLeading,
@@ -60,8 +61,8 @@ enum AIscendPanelStyle {
             LinearGradient(
                 colors: [
                     AIscendTheme.Colors.borderStrong,
-                    AIscendTheme.Colors.accentGlow.opacity(0.30),
-                    AIscendTheme.Colors.borderSubtle
+                    AIscendTheme.Colors.accentGlow.opacity(0.34),
+                    AIscendTheme.Colors.borderSubtle.opacity(0.9)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -81,9 +82,9 @@ enum AIscendPanelStyle {
     var glow: Color {
         switch self {
         case .hero:
-            AIscendTheme.Shadow.accent
+            AIscendTheme.Colors.heroAura
         case .elevated:
-            AIscendTheme.Colors.accentDeep.opacity(0.12)
+            AIscendTheme.Colors.accentPrimary.opacity(0.10)
         default:
             .clear
         }
@@ -103,22 +104,22 @@ enum AIscendPanelStyle {
     var shadowRadius: CGFloat {
         switch self {
         case .hero:
-            26
+            30
         case .elevated:
-            20
+            22
         default:
-            14
+            16
         }
     }
 
     var shadowYOffset: CGFloat {
         switch self {
         case .hero:
-            16
+            18
         case .elevated:
-            12
+            14
         default:
-            8
+            10
         }
     }
 }
@@ -145,6 +146,7 @@ enum AIscendButtonVariant {
         case .primary:
             LinearGradient(
                 colors: [
+                    AIscendTheme.Colors.accentGlow,
                     AIscendTheme.Colors.accentSoft,
                     AIscendTheme.Colors.accentPrimary
                 ],
@@ -154,15 +156,18 @@ enum AIscendButtonVariant {
         case .secondary:
             LinearGradient(
                 colors: [
-                    AIscendTheme.Colors.tertiaryBackground.opacity(0.95),
-                    AIscendTheme.Colors.secondaryBackground.opacity(0.95)
+                    AIscendTheme.Colors.surfaceInteractive.opacity(0.95),
+                    AIscendTheme.Colors.surfaceMuted.opacity(0.95)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         case .ghost:
             LinearGradient(
-                colors: [.clear, .clear],
+                colors: [
+                    AIscendTheme.Colors.surfaceHighlight.opacity(0.22),
+                    AIscendTheme.Colors.surfaceHighlight.opacity(0.06)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -181,7 +186,7 @@ enum AIscendButtonVariant {
     var border: Color {
         switch self {
         case .primary:
-            AIscendTheme.Colors.accentGlow.opacity(0.44)
+            AIscendTheme.Colors.accentGlow.opacity(0.52)
         case .secondary:
             AIscendTheme.Colors.borderStrong
         case .ghost:
@@ -194,7 +199,7 @@ enum AIscendButtonVariant {
     var glow: Color {
         switch self {
         case .primary:
-            AIscendTheme.Colors.accentPrimary.opacity(0.30)
+            AIscendTheme.Colors.accentPrimary.opacity(0.24)
         case .destructive:
             AIscendTheme.Colors.error.opacity(0.22)
         default:
@@ -213,11 +218,11 @@ enum AIscendBadgeStyle {
     var fill: Color {
         switch self {
         case .accent:
-            AIscendTheme.Colors.accentPrimary.opacity(0.20)
+            AIscendTheme.Colors.accentPrimary.opacity(0.18)
         case .neutral:
-            AIscendTheme.Colors.surfaceHighlight.opacity(0.85)
+            AIscendTheme.Colors.surfaceHighlight.opacity(0.88)
         case .subtle:
-            AIscendTheme.Colors.secondaryBackground.opacity(0.9)
+            AIscendTheme.Colors.surfaceMuted.opacity(0.92)
         case .success:
             AIscendTheme.Colors.success.opacity(0.18)
         case .locked:
@@ -270,17 +275,21 @@ private struct AIscendPanelModifier: ViewModifier {
                 .fill(style.fill)
 
             shape
+                .fill(.ultraThinMaterial)
+                .opacity(style == .muted ? 0.08 : 0.14)
+
+            shape
                 .fill(
                     LinearGradient(
                         colors: [
-                            AIscendTheme.Colors.surfaceHighlight,
+                            AIscendTheme.Colors.surfaceGloss,
                             .clear
                         ],
                         startPoint: .topLeading,
                         endPoint: .center
                     )
                 )
-                .opacity(style == .muted ? 0.45 : 0.9)
+                .opacity(style == .muted ? 0.38 : 0.86)
 
             if style == .hero {
                 shape
@@ -288,6 +297,7 @@ private struct AIscendPanelModifier: ViewModifier {
                         RadialGradient(
                             colors: [
                                 AIscendTheme.Colors.accentGlow.opacity(0.18),
+                                AIscendTheme.Colors.accentPrimary.opacity(0.08),
                                 .clear
                             ],
                             center: .topTrailing,
@@ -313,19 +323,32 @@ struct AIscendButtonStyle: ButtonStyle {
             .aiscendTextStyle(.buttonLabel, color: variant.foreground)
             .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
             .padding(.vertical, AIscendTheme.Spacing.medium)
-            .frame(minHeight: 54)
+            .frame(minHeight: 56)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                     .fill(variant.background)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.10),
+                                        .clear
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                     .stroke(variant.border, lineWidth: AIscendTheme.Stroke.thin)
             )
-            .shadow(color: variant.glow, radius: 18, x: 0, y: 0)
+            .shadow(color: variant.glow, radius: 20, x: 0, y: 12)
             .opacity(configuration.isPressed ? 0.94 : 1)
-            .scaleEffect(configuration.isPressed ? 0.988 : 1)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(AIscendTheme.Motion.press, value: configuration.isPressed)
     }
 }
@@ -351,9 +374,9 @@ struct AIscendButtonLabel: View {
             Text(title)
                 .lineLimit(1)
 
-            Spacer(minLength: 0)
-
             if let trailingSymbol {
+                Spacer(minLength: 0)
+
                 Image(systemName: trailingSymbol)
                     .font(.system(size: 14, weight: .semibold))
             }
@@ -392,11 +415,12 @@ struct AIscendSectionHeader: View {
             }
 
             Text(title)
-                .aiscendTextStyle(prominence == .hero ? .screenTitle : .sectionTitle)
+                .aiscendTextStyle(prominence == .hero ? .heroTitle : .sectionTitle)
+                .lineSpacing(prominence == .hero ? 2 : 0)
 
             if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
-                    .aiscendTextStyle(.body)
+                    .aiscendTextStyle(prominence == .hero ? .body : .secondaryBody, color: AIscendTheme.Colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -423,13 +447,17 @@ struct AIscendBadge: View {
 
             Text(title)
                 .aiscendTextStyle(.caption, color: style.foreground)
-                .textCase(.uppercase)
+                .lineLimit(1)
         }
         .padding(.horizontal, AIscendTheme.Spacing.small)
         .padding(.vertical, AIscendTheme.Spacing.xSmall)
         .background(
             Capsule(style: .continuous)
                 .fill(style.fill)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                )
         )
         .overlay(
             Capsule(style: .continuous)
@@ -477,8 +505,8 @@ struct AIscendBrandMark: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            AIscendTheme.Colors.secondaryBackground.opacity(0.96),
-                            AIscendTheme.Colors.cardGradientEnd.opacity(0.92)
+                            AIscendTheme.Colors.surfaceGlass,
+                            AIscendTheme.Colors.cardGradientEnd.opacity(0.96)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -529,16 +557,29 @@ struct AIscendIconOrb: View {
         ZStack {
             Circle()
                 .fill(accent.gradient)
-                .opacity(0.20)
+                .opacity(0.18)
                 .background(
                     Circle()
                         .fill(accent.gradient)
-                        .blur(radius: 18)
+                        .blur(radius: 22)
                         .opacity(0.28)
                 )
 
             Circle()
-                .stroke(accent.tint.opacity(0.42), lineWidth: AIscendTheme.Stroke.thin)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.surfaceHighlight.opacity(0.8),
+                            AIscendTheme.Colors.surfaceGlass.opacity(0.8)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .padding(1)
+
+            Circle()
+                .stroke(accent.tint.opacity(0.36), lineWidth: AIscendTheme.Stroke.thin)
 
             Image(systemName: symbol)
                 .font(.system(size: size * 0.35, weight: .semibold))
@@ -574,19 +615,20 @@ struct AIscendMetricCard: View {
                     .aiscendTextStyle(.metricCompact)
 
                 Text(title)
-                    .aiscendTextStyle(.cardTitle)
+                    .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
 
                 Text(detail)
                     .aiscendTextStyle(.secondaryBody)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 176, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 164, alignment: .topLeading)
         .padding(AIscendTheme.Spacing.mediumLarge)
         .aiscendPanel(highlighted ? .hero : .standard)
     }
 }
 
 struct AIscendLoadingIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
 
     var body: some View {
@@ -619,6 +661,10 @@ struct AIscendLoadingIndicator: View {
         .frame(width: 76, height: 76)
         .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.24), radius: 22, x: 0, y: 0)
         .onAppear {
+            guard !reduceMotion else {
+                return
+            }
+
             withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
                 isAnimating = true
             }
@@ -636,11 +682,15 @@ private struct AIscendInputModifier: ViewModifier {
             .padding(.horizontal, AIscendTheme.Spacing.medium)
             .padding(.vertical, AIscendTheme.Spacing.medium)
             .background(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                     .fill(AIscendTheme.Colors.fieldFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .fill(Color.white.opacity(0.02))
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                     .stroke(
                         isFocused ? AIscendTheme.Colors.accentGlow : AIscendTheme.Colors.borderSubtle,
                         lineWidth: AIscendTheme.Stroke.thin
@@ -667,6 +717,219 @@ struct AIscendCapsule: View {
             symbol: symbol,
             style: isActive ? .accent : .neutral
         )
+    }
+}
+
+struct AIscendTopBarButton: View {
+    let symbol: String
+    var highlighted: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: highlighted
+                                ? [
+                                    AIscendTheme.Colors.accentPrimary.opacity(0.30),
+                                    AIscendTheme.Colors.accentDeep.opacity(0.34)
+                                ]
+                                : [
+                                    AIscendTheme.Colors.surfaceHighlight.opacity(0.92),
+                                    AIscendTheme.Colors.surfaceMuted.opacity(0.92)
+                                ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(highlighted ? AIscendTheme.Colors.accentGlow : AIscendTheme.Colors.textPrimary)
+            }
+            .frame(width: 44, height: 44)
+            .overlay(
+                Circle()
+                    .stroke(
+                        highlighted ? AIscendTheme.Colors.accentGlow.opacity(0.42) : AIscendTheme.Colors.borderSubtle,
+                        lineWidth: AIscendTheme.Stroke.thin
+                    )
+            )
+            .shadow(color: highlighted ? AIscendTheme.Colors.accentPrimary.opacity(0.18) : .clear, radius: 16, x: 0, y: 8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct AIscendStatChip: View {
+    let title: String
+    let value: String
+    var symbol: String? = nil
+    var accent: RoutineAccent = .sky
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            if let symbol {
+                AIscendIconOrb(symbol: symbol, accent: accent, size: 34)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Text(value)
+                    .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.horizontal, AIscendTheme.Spacing.medium)
+        .padding(.vertical, AIscendTheme.Spacing.small)
+        .background(
+            Capsule(style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(0.025))
+                )
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(accent.tint.opacity(0.24), lineWidth: AIscendTheme.Stroke.thin)
+        )
+    }
+}
+
+struct AIscendEditorialHeroCard<Content: View>: View {
+    let eyebrow: String?
+    let title: String
+    let subtitle: String?
+    var accent: RoutineAccent = .sky
+    private let content: Content
+
+    init(
+        eyebrow: String? = nil,
+        title: String,
+        subtitle: String? = nil,
+        accent: RoutineAccent = .sky,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.accent = accent
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.cardGradientStart,
+                            accent.tint.opacity(0.22),
+                            AIscendTheme.Colors.cardGradientEnd
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Circle()
+                .fill(accent.gradient)
+                .frame(width: 220, height: 220)
+                .blur(radius: 34)
+                .opacity(0.34)
+                .offset(x: 140, y: -90)
+
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.mediaScrimTop,
+                            .clear,
+                            AIscendTheme.Colors.mediaScrimBottom
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                AIscendSectionHeader(
+                    eyebrow: eyebrow,
+                    title: title,
+                    subtitle: subtitle,
+                    prominence: .hero
+                )
+
+                content
+            }
+            .padding(AIscendTheme.Spacing.xLarge)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.borderStrong,
+                            accent.tint.opacity(0.26),
+                            AIscendTheme.Colors.borderSubtle
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: AIscendTheme.Stroke.thin
+                )
+        )
+        .shadow(color: Color.black.opacity(0.42), radius: 26, x: 0, y: 18)
+        .shadow(color: accent.glow.opacity(0.52), radius: 30, x: 0, y: 0)
+    }
+}
+
+struct AIscendPreferenceCard<Content: View>: View {
+    let title: String
+    let subtitle: String?
+    let symbol: String
+    var accent: RoutineAccent = .sky
+    private let content: Content
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        symbol: String,
+        accent: RoutineAccent = .sky,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.symbol = symbol
+        self.accent = accent
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+            HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: symbol, accent: accent, size: 42)
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                    Text(title)
+                        .aiscendTextStyle(.cardTitle)
+
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                    }
+                }
+            }
+
+            content
+        }
+        .padding(AIscendTheme.Spacing.large)
+        .aiscendPanel(.muted)
     }
 }
 
