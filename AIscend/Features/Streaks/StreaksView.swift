@@ -122,7 +122,7 @@ struct StreaksView: View {
                         HStack(spacing: AIscendTheme.Spacing.small) {
                             StreaksMetricChip(title: "Current", value: "\(snapshot.currentStreak)d")
                             StreaksMetricChip(title: "Best", value: "\(snapshot.bestStreak)d")
-                            StreaksMetricChip(title: "Perfect weeks", value: "\(snapshot.perfectWeeks)")
+                            StreaksMetricChip(title: "Freezes", value: "\(snapshot.freezesRemaining)")
                         }
                     }
 
@@ -189,6 +189,26 @@ struct StreaksView: View {
                     StreaksMetricChip(title: "Check-ins", value: "\(snapshot.totalCheckIns)")
                     StreaksMetricChip(title: "Badges", value: "\(badgeManager.earnedCount)")
                     StreaksMetricChip(title: "Next", value: "\(snapshot.nextMilestone)d")
+                }
+
+                if snapshot.usedFreezeRecently {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+                        Text("A streak freeze was used automatically. \(snapshot.freezesRemaining) remaining.")
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                    }
+                    .padding(AIscendTheme.Spacing.medium)
+                    .background(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .stroke(AIscendTheme.Colors.accentGlow.opacity(0.18), lineWidth: 1)
+                    )
                 }
 
                 if let todayRecord {

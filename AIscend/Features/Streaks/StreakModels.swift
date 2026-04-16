@@ -14,6 +14,20 @@ enum StreakDayStatus: String, Codable, Hashable, Sendable {
     case future
 }
 
+struct StreakState: Codable, Hashable, Sendable {
+    var streak: Int
+    var lastDate: String?
+    var longest: Int
+    var freezes: Int
+
+    static let `default` = StreakState(
+        streak: 0,
+        lastDate: nil,
+        longest: 0,
+        freezes: 2
+    )
+}
+
 struct StreakDayModel: Identifiable, Hashable, Sendable {
     let id: String
     let date: Date
@@ -52,6 +66,8 @@ struct StreakSnapshot: Hashable, Sendable {
     let bestStreak: Int
     let totalCheckIns: Int
     let checkedInToday: Bool
+    let freezesRemaining: Int
+    let usedFreezeRecently: Bool
     let nextMilestone: Int
     let progressToNextMilestone: Double
     let recentDays: [StreakDayModel]
@@ -62,6 +78,10 @@ struct StreakSnapshot: Hashable, Sendable {
     var motivationalLine: String {
         if checkedInToday {
             return "Today's check-in is locked. Protect the chain tomorrow."
+        }
+
+        if usedFreezeRecently {
+            return "A streak freeze protected the run. Lock today in so the chain keeps moving cleanly."
         }
 
         if currentStreak >= 14 {
@@ -78,6 +98,10 @@ struct StreakSnapshot: Hashable, Sendable {
     var statusTitle: String {
         if checkedInToday {
             return "Protected today"
+        }
+
+        if usedFreezeRecently {
+            return "Freeze just used"
         }
 
         if currentStreak >= 7 {

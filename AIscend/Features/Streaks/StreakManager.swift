@@ -13,19 +13,23 @@ struct StreakManager: Sendable {
     @MainActor
     func makeSnapshot(
         from records: [String: DailyCheckInRecord],
+        state: StreakState,
+        usedFreezeRecently: Bool = false,
         now: Date = .now,
         windowSize: Int = 28
     ) -> StreakSnapshot {
         let todayKey = DailyCheckInStore.ymd(for: now)
         let checkedInToday = records[todayKey] != nil
-        let current = currentStreak(from: records, now: now)
+        let current = max(state.streak, 0)
         let next = nextMilestone(for: current)
 
         return StreakSnapshot(
             currentStreak: current,
-            bestStreak: bestStreak(from: records.keys.sorted()),
+            bestStreak: max(state.longest, bestStreak(from: records.keys.sorted())),
             totalCheckIns: records.count,
             checkedInToday: checkedInToday,
+            freezesRemaining: max(state.freezes, 0),
+            usedFreezeRecently: usedFreezeRecently,
             nextMilestone: next,
             progressToNextMilestone: progressToNextMilestone(current: current, next: next),
             recentDays: recentDays(from: records, now: now, windowSize: windowSize),
@@ -36,29 +40,82 @@ struct StreakManager: Sendable {
     }
 
     @MainActor
-    private func currentStreak(from records: [String: DailyCheckInRecord], now: Date) -> Int {
-        var streak = 0
-        let today = calendar.startOfDay(for: now)
+    func bootstrapState(from records: [String: DailyCheckInRecord], now: Date = .now) -> StreakState {
+        let sortedKeys = records.keys.sorted()
+        let best = bestStreak(from: sortedKeys)
+        let streak = currentStreakFromRecords(records, now: now)
 
-        for offset in 0..<366 {
-            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
-                break
-            }
+        return StreakState(
+            streak: streak,
+            lastDate: sortedKeys.last,
+            longest: max(best, streak),
+            freezes: StreakState.default.freezes
+        )
+    }
 
-            let key = DailyCheckInStore.ymd(for: date)
-            if records[key] != nil {
-                streak += 1
-                continue
-            }
+    func reconcile(
+        state: StreakState,
+        now: Date = .now
+    ) -> (state: StreakState, usedFreezeRecently: Bool) {
+        var updated = state
+        var usedFreezeRecently = false
+        let todayKey = DailyCheckInStore.ymd(for: now)
 
-            if offset == 0 {
-                continue
-            }
-
-            break
+        guard let lastDate = updated.lastDate else {
+            return (updated, false)
         }
 
-        return streak
+        guard lastDate != todayKey else {
+            return (updated, false)
+        }
+
+        guard let gap = uncoveredGapDays(since: lastDate, now: now), gap > 0 else {
+            return (updated, false)
+        }
+
+        var remainingGap = gap
+        while remainingGap > 0, updated.freezes > 0 {
+            updated.freezes -= 1
+            usedFreezeRecently = true
+
+            if let coveredDate = coveredDate(from: lastDate, offset: gap - remainingGap + 1) {
+                updated.lastDate = coveredDate
+            }
+
+            remainingGap -= 1
+        }
+
+        if remainingGap > 0 {
+            updated.streak = 0
+            updated.lastDate = nil
+        }
+
+        updated.longest = max(updated.longest, updated.streak)
+        return (updated, usedFreezeRecently)
+    }
+
+    func recordCheckIn(
+        state: StreakState,
+        now: Date = .now
+    ) -> StreakState {
+        var updated = state
+        let todayKey = DailyCheckInStore.ymd(for: now)
+
+        if updated.lastDate == todayKey {
+            return updated
+        }
+
+        if let lastDate = updated.lastDate,
+           let gap = dayGap(from: lastDate, to: todayKey),
+           gap == 1 {
+            updated.streak += 1
+        } else {
+            updated.streak = max(updated.streak, 0) + 1
+        }
+
+        updated.lastDate = todayKey
+        updated.longest = max(updated.longest, updated.streak)
+        return updated
     }
 
     @MainActor
@@ -202,5 +259,60 @@ struct StreakManager: Sendable {
                 status: status
             )
         }
+    }
+
+    @MainActor
+    private func currentStreakFromRecords(_ records: [String: DailyCheckInRecord], now: Date) -> Int {
+        var streak = 0
+        let today = calendar.startOfDay(for: now)
+
+        for offset in 0..<366 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
+                break
+            }
+
+            let key = DailyCheckInStore.ymd(for: date)
+            if records[key] != nil {
+                streak += 1
+                continue
+            }
+
+            if offset == 0 {
+                continue
+            }
+
+            break
+        }
+
+        return streak
+    }
+
+    private func uncoveredGapDays(since lastDate: String, now: Date) -> Int? {
+        let todayKey = DailyCheckInStore.ymd(for: now)
+        guard let gap = dayGap(from: lastDate, to: todayKey) else {
+            return nil
+        }
+
+        return max(gap - 1, 0)
+    }
+
+    private func coveredDate(from lastDate: String, offset: Int) -> String? {
+        guard let date = DailyCheckInStore.date(from: lastDate),
+              let protectedDate = calendar.date(byAdding: .day, value: offset, to: date) else {
+            return nil
+        }
+
+        return DailyCheckInStore.ymd(for: protectedDate)
+    }
+
+    private func dayGap(from earlier: String, to later: String) -> Int? {
+        guard let earlierDate = DailyCheckInStore.date(from: earlier),
+              let laterDate = DailyCheckInStore.date(from: later) else {
+            return nil
+        }
+
+        let earlierDay = calendar.startOfDay(for: earlierDate)
+        let laterDay = calendar.startOfDay(for: laterDate)
+        return calendar.dateComponents([.day], from: earlierDay, to: laterDay).day
     }
 }

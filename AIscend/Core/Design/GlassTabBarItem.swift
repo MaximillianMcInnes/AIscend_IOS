@@ -19,6 +19,7 @@ struct GlassTabBarItem: View {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
+        .accessibilityLabel(tab == .scan ? "Scan" : label(for: tab))
     }
 
     private var standardItem: some View {
@@ -87,65 +88,35 @@ struct GlassTabBarItem: View {
     }
 
     private var scanItem: some View {
-        VStack(spacing: 4) {
-            ZStack {
-                Circle()
-                    .fill(scanCircleFill)
-
-                Circle()
-                    .stroke(
-                        isSelected
-                        ? AIscendTheme.Colors.accentGlow.opacity(0.42)
-                        : AIscendTheme.Colors.borderStrong,
-                        lineWidth: 1
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.accentGlow.opacity(isSelected ? 0.90 : 0.70),
+                            AIscendTheme.Colors.accentSoft.opacity(isSelected ? 0.96 : 0.82),
+                            AIscendTheme.Colors.accentPrimary.opacity(isSelected ? 1 : 0.90)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-
-                Image(systemName: iconName(for: tab))
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(
-                        isSelected
-                        ? AnyShapeStyle(AIscendTheme.Colors.textPrimary)
-                        : AnyShapeStyle(MainTabBarStyle.iconIdle)
-                    )
-            }
-            .frame(width: 52, height: 52)
-            .shadow(
-                color: isSelected ? AIscendTheme.Colors.accentPrimary.opacity(0.28) : .clear,
-                radius: 18,
-                x: 0,
-                y: 10
-            )
-
-            Text(label(for: tab))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(
-                    isSelected
-                    ? AnyShapeStyle(AIscendTheme.Colors.textPrimary)
-                    : AnyShapeStyle(MainTabBarStyle.textIdle)
                 )
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 64)
-        .contentShape(Rectangle())
-    }
 
-    private var scanCircleFill: LinearGradient {
-        LinearGradient(
-            colors: isSelected
-                ? [
-                    AIscendTheme.Colors.accentGlow,
-                    AIscendTheme.Colors.accentSoft,
-                    AIscendTheme.Colors.accentPrimary
-                ]
-                : [
-                    AIscendTheme.Colors.surfaceInteractive,
-                    AIscendTheme.Colors.surfaceMuted
-                ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+            Circle()
+                .fill(Color.white.opacity(isSelected ? 0.10 : 0.06))
+                .padding(1)
+
+            Image(systemName: iconName(for: tab))
+                .font(.system(size: 22, weight: .black))
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+        }
+        .frame(width: 56, height: 56)
+        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(isSelected ? 0.42 : 0.26), radius: isSelected ? 24 : 18, x: 0, y: 0)
+        .shadow(color: AIscendTheme.Colors.accentGlow.opacity(isSelected ? 0.24 : 0.12), radius: isSelected ? 32 : 20, x: 0, y: 10)
+        .frame(maxWidth: .infinity)
+        .frame(height: 56)
+        .contentShape(Rectangle())
+        .offset(y: -1)
     }
 
     private func label(for tab: MainTabDestination) -> String {
@@ -170,7 +141,7 @@ struct GlassTabBarItem: View {
         case .routine:
             return isSelected ? "square.grid.2x2.fill" : "square.grid.2x2"
         case .scan:
-            return isSelected ? "camera.macro.circle.fill" : "camera.macro.circle"
+            return "plus"
         case .chat:
             return isSelected ? "bubble.left.fill" : "bubble.left"
         case .more:

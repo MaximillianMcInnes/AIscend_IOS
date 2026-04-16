@@ -117,10 +117,12 @@ struct MainTabContainer: View {
         .animation(.easeOut(duration: 0.22), value: shouldShowTabBar)
         .task(id: session.user?.id) {
             dailyPhotoStore.applyAuthenticatedUserID(session.user?.id)
+            dailyCheckInStore.refreshForCurrentDate()
             maybePresentDailyPhotoPrompt(.firstOpen)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                dailyCheckInStore.refreshForCurrentDate()
                 maybePresentDailyPhotoPrompt(.engagement)
             }
         }
@@ -137,7 +139,7 @@ struct MainTabContainer: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             withAnimation(.easeOut(duration: 0.22)) {
                 isKeyboardPresented = false
-            }
+            }	
         }
         .sheet(isPresented: $showingDailyPhotoCapture) {
             DailyPhotoCaptureSheet(
@@ -260,7 +262,8 @@ struct MainTabContainer: View {
                 dailyCheckInStore: dailyCheckInStore,
                 badgeManager: badgeManager,
                 onOpenCheckIn: { showingDailyCheckIn = true },
-                onOpenConsistency: { showingStreaks = true }
+                onOpenConsistency: { showingStreaks = true },
+                onRefine: { model.resetOnboarding() }
             )
             .toolbar(.hidden, for: .navigationBar)
         }

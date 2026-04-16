@@ -283,6 +283,8 @@ final class AppModel {
     private enum Keys {
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let routineProfile = "routineProfile"
+        static let completedStepIDs = "completedStepIDs"
+        static let routineXP = "routineXP"
     }
 
     private enum GlobalKeys {
@@ -334,7 +336,25 @@ final class AppModel {
         }
     }
 
-    var completedStepIDs: Set<String> = []
+    var completedStepIDs: Set<String> = [] {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            persistCompletedStepIDs()
+        }
+    }
+
+    var routineXP: Int = 0 {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            defaults.set(routineXP, forKey: namespacedKey(Keys.routineXP))
+        }
+    }
 
     var profileAvatarURL: URL? {
         guard let relativePath = profile.avatarRelativePath else {
@@ -397,6 +417,49 @@ final class AppModel {
 
     var progressLabel: String {
         "\(Int(progress * 100))%"
+    }
+
+    var completedRoutineCount: Int {
+        routineSections.reduce(0) { partialResult, section in
+            partialResult + section.steps.filter(\.isComplete).count
+        }
+    }
+
+    var totalRoutineCount: Int {
+        routineSections.reduce(0) { $0 + $1.steps.count }
+    }
+
+    var routineLevel: Int {
+        max(1, (routineXP / 120) + 1)
+    }
+
+    var xpIntoCurrentLevel: Int {
+        routineXP % 120
+    }
+
+    var xpRequiredForNextLevel: Int {
+        120
+    }
+
+    var xpProgress: Double {
+        Double(xpIntoCurrentLevel) / Double(xpRequiredForNextLevel)
+    }
+
+    var currentLevelTitle: String {
+        switch routineLevel {
+        case 1...2:
+            "Foundation"
+        case 3...4:
+            "Momentum"
+        case 5...6:
+            "Locked In"
+        default:
+            "Mastery"
+        }
+    }
+
+    var dailyRoutineSections: [RoutineSection] {
+        routineSections
     }
 
     var nextOpenStep: RoutineStep? {
@@ -524,6 +587,7 @@ final class AppModel {
             completedStepIDs.remove(stepID)
         } else {
             completedStepIDs.insert(stepID)
+            routineXP += xpReward(for: stepID)
         }
     }
 
@@ -590,6 +654,14 @@ final class AppModel {
         }
 
         defaults.set(data, forKey: namespacedKey(Keys.routineProfile))
+    }
+
+    private func persistCompletedStepIDs() {
+        guard let data = try? JSONEncoder().encode(Array(completedStepIDs).sorted()) else {
+            return
+        }
+
+        defaults.set(data, forKey: namespacedKey(Keys.completedStepIDs))
     }
 
     func saveProfileAvatar(data: Data, fileExtension: String = "jpg") throws {
@@ -668,6 +740,23 @@ final class AppModel {
         } else {
             profile = RoutineProfile()
         }
+
+        let completedKey = namespacedKey(Keys.completedStepIDs)
+        if
+            let data = defaults.data(forKey: completedKey),
+            let decoded = try? JSONDecoder().decode([String].self, from: data)
+        {
+            completedStepIDs = Set(decoded)
+        } else {
+            completedStepIDs = []
+        }
+
+        let xpKey = namespacedKey(Keys.routineXP)
+        if defaults.object(forKey: xpKey) != nil {
+            routineXP = defaults.integer(forKey: xpKey)
+        } else {
+            routineXP = 0
+        }
     }
 
     private func migrateLegacyStateIfNeeded(to userID: String?) {
@@ -678,7 +767,9 @@ final class AppModel {
         let destinationNamespace = Self.namespace(for: userID)
         let hasDestinationState =
             defaults.object(forKey: namespacedKey(Keys.hasCompletedOnboarding, namespace: destinationNamespace)) != nil ||
-            defaults.data(forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace)) != nil
+            defaults.data(forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace)) != nil ||
+            defaults.data(forKey: namespacedKey(Keys.completedStepIDs, namespace: destinationNamespace)) != nil ||
+            defaults.object(forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace)) != nil
 
         guard !hasDestinationState else {
             return
@@ -686,6 +777,8 @@ final class AppModel {
 
         let guestOnboardingKey = Self.namespacedKey(Keys.hasCompletedOnboarding, namespace: "guest")
         let guestProfileKey = Self.namespacedKey(Keys.routineProfile, namespace: "guest")
+        let guestCompletedKey = Self.namespacedKey(Keys.completedStepIDs, namespace: "guest")
+        let guestXPKey = Self.namespacedKey(Keys.routineXP, namespace: "guest")
 
         if let guestOnboarding = defaults.object(forKey: guestOnboardingKey) {
             defaults.set(guestOnboarding, forKey: namespacedKey(Keys.hasCompletedOnboarding, namespace: destinationNamespace))
@@ -697,6 +790,27 @@ final class AppModel {
             defaults.set(guestProfile, forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace))
         } else if let legacyProfile = defaults.data(forKey: Keys.routineProfile) {
             defaults.set(legacyProfile, forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace))
+        }
+
+        if let guestCompleted = defaults.data(forKey: guestCompletedKey) {
+            defaults.set(guestCompleted, forKey: namespacedKey(Keys.completedStepIDs, namespace: destinationNamespace))
+        }
+
+        if let guestXP = defaults.object(forKey: guestXPKey) {
+            defaults.set(guestXP, forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace))
+        }
+    }
+
+    private func xpReward(for stepID: String) -> Int {
+        switch stepID {
+        case "mission", "pace":
+            12
+        case "deep-work", "noise-down":
+            18
+        case "primary-anchor", "secondary-anchor":
+            14
+        default:
+            10
         }
     }
 

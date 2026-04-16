@@ -13,6 +13,31 @@ enum DailyPhotoPromptTrigger {
     case engagement
 }
 
+enum DailyPhotoSortOrder: String, CaseIterable, Identifiable, Sendable {
+    case newestFirst
+    case oldestFirst
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .newestFirst:
+            "Newest"
+        case .oldestFirst:
+            "Oldest"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .newestFirst:
+            "Newest first"
+        case .oldestFirst:
+            "Oldest first"
+        }
+    }
+}
+
 struct DailyPhotoEntry: Codable, Hashable, Identifiable, Sendable {
     let ymd: String
     let relativePath: String
@@ -116,13 +141,23 @@ final class DailyPhotoStore: ObservableObject {
             .map { $0 }
     }
 
-    func sortedEntries() -> [DailyPhotoEntry] {
+    func sortedEntries(order: DailyPhotoSortOrder = .newestFirst) -> [DailyPhotoEntry] {
         entriesByDay.values.sorted { lhs, rhs in
             if lhs.ymd == rhs.ymd {
-                return lhs.createdAt > rhs.createdAt
+                switch order {
+                case .newestFirst:
+                    return lhs.createdAt > rhs.createdAt
+                case .oldestFirst:
+                    return lhs.createdAt < rhs.createdAt
+                }
             }
 
-            return lhs.ymd > rhs.ymd
+            switch order {
+            case .newestFirst:
+                return lhs.ymd > rhs.ymd
+            case .oldestFirst:
+                return lhs.ymd < rhs.ymd
+            }
         }
     }
 

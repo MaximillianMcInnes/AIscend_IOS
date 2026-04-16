@@ -94,15 +94,18 @@ struct DailyCheckInOutcome: Sendable {
 final class DailyCheckInStore: ObservableObject {
     private enum Keys {
         static let records = "aiscend.dailyCheckIn.records"
+        static let streakState = "aiscend.dailyCheckIn.streakState"
     }
 
     @Published private(set) var recordsByDay: [String: DailyCheckInRecord] = [:]
     @Published private(set) var snapshot: StreakSnapshot
+    @Published private(set) var streakState: StreakState
 
     private let defaults: UserDefaults
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let streakManager: StreakManager
+    private var usedFreezeRecently = false
 
     init(
         defaults: UserDefaults = .standard,
@@ -127,8 +130,26 @@ final class DailyCheckInStore: ObservableObject {
             loadedRecords = [:]
         }
 
+        let loadedState: StreakState
+        if let data = defaults.data(forKey: Keys.streakState),
+           let decoded = try? decoder.decode(StreakState.self, from: data) {
+            loadedState = decoded
+        } else {
+            loadedState = streakManager.bootstrapState(from: loadedRecords)
+        }
+
+        let reconciliation = streakManager.reconcile(state: loadedState)
+
         self.recordsByDay = loadedRecords
-        self.snapshot = streakManager.makeSnapshot(from: loadedRecords)
+        self.streakState = reconciliation.state
+        self.usedFreezeRecently = reconciliation.usedFreezeRecently
+        self.snapshot = streakManager.makeSnapshot(
+            from: loadedRecords,
+            state: reconciliation.state,
+            usedFreezeRecently: reconciliation.usedFreezeRecently
+        )
+
+        persist()
     }
 
     var hasCheckedInToday: Bool {
@@ -145,6 +166,8 @@ final class DailyCheckInStore: ObservableObject {
         routineCompleted: Bool,
         selfCareCompleted: Bool
     ) -> DailyCheckInOutcome {
+        refreshForCurrentDate()
+
         let key = Self.ymd(for: .now)
         let cleanNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         let wasNewCheckIn = recordsByDay[key] == nil
@@ -159,9 +182,15 @@ final class DailyCheckInStore: ObservableObject {
         )
 
         recordsByDay[key] = record
+        streakState = streakManager.recordCheckIn(state: streakState)
+        usedFreezeRecently = false
         persist()
 
-        let updatedSnapshot = streakManager.makeSnapshot(from: recordsByDay)
+        let updatedSnapshot = streakManager.makeSnapshot(
+            from: recordsByDay,
+            state: streakState,
+            usedFreezeRecently: usedFreezeRecently
+        )
         snapshot = updatedSnapshot
 
         return DailyCheckInOutcome(
@@ -210,15 +239,30 @@ final class DailyCheckInStore: ObservableObject {
         }
     }
 
+    func refreshForCurrentDate(now: Date = .now) {
+        let reconciliation = streakManager.reconcile(state: streakState, now: now)
+        streakState = reconciliation.state
+        usedFreezeRecently = reconciliation.usedFreezeRecently
+        snapshot = streakManager.makeSnapshot(
+            from: recordsByDay,
+            state: streakState,
+            usedFreezeRecently: usedFreezeRecently,
+            now: now
+        )
+        persist()
+    }
+
     private func persist() {
-        guard let encoded = try? encoder.encode(recordsByDay) else {
+        guard let encodedRecords = try? encoder.encode(recordsByDay),
+              let encodedState = try? encoder.encode(streakState) else {
             return
         }
 
-        defaults.set(encoded, forKey: Keys.records)
+        defaults.set(encodedRecords, forKey: Keys.records)
+        defaults.set(encodedState, forKey: Keys.streakState)
     }
 
-    static func ymd(for date: Date) -> String {
+    nonisolated static func ymd(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -227,7 +271,7 @@ final class DailyCheckInStore: ObservableObject {
         return formatter.string(from: date)
     }
 
-    static func date(from ymd: String) -> Date? {
+    nonisolated static func date(from ymd: String) -> Date? {
         let formatter = DateFormatter()
         formatter.calendar = Calendar.current
         formatter.locale = Locale(identifier: "en_US_POSIX")
