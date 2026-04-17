@@ -2,8 +2,6 @@
 //  AIscendScanStudioView.swift
 //  AIscend
 //
-//  Created by Codex on 4/8/26.
-//
 
 import SwiftUI
 
@@ -14,19 +12,11 @@ struct AIscendScanStudioView: View {
     var onOpenChat: () -> Void = {}
     var onOpenRoutine: () -> Void = {}
 
-    @State private var hasAppeared = false
+    @State private var selectedTab: StudioTab = .newScan
+    @State private var showScanFlow = false
 
     private var snapshot: DashboardSnapshot {
         .live(from: model)
-    }
-
-    private var scoreLabel: String {
-        "\(snapshot.score)"
-    }
-
-    private var scanCountLabel: String {
-        let count = snapshot.scans.count
-        return count == 1 ? "1 baseline stored" : "\(count) baselines stored"
     }
 
     var body: some View {
@@ -34,346 +24,133 @@ struct AIscendScanStudioView: View {
             AIscendBackdrop()
             DashboardAmbientLayer()
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
-                    heroCard(
-                        onBeginCapture: onBeginCapture,
-                        onOpenLatestResult: {
-                            onOpenLatestResult()
-                        }
-                    )
-                    .scanStudioReveal(isVisible: hasAppeared, delay: 0.02)
+            VStack(spacing: AIscendTheme.Spacing.large) {
+                header
 
-                    statusStrip
-                        .scanStudioReveal(isVisible: hasAppeared, delay: 0.08)
-
-                    captureProtocol
-                        .id("capture-protocol")
-                        .scanStudioReveal(isVisible: hasAppeared, delay: 0.14)
-
-                    archiveSection
-                        .scanStudioReveal(isVisible: hasAppeared, delay: 0.20)
-
-                    supportSection
-                        .scanStudioReveal(isVisible: hasAppeared, delay: 0.26)
+                Picker("Studio Tab", selection: $selectedTab) {
+                    Text("New Scan").tag(StudioTab.newScan)
+                    Text("Previous Scans").tag(StudioTab.previousScans)
                 }
-                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-                .padding(.top, AIscendTheme.Spacing.large)
-                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+                .pickerStyle(.segmented)
+
+                Group {
+                    switch selectedTab {
+                    case .newScan:
+                        newScanTab
+                    case .previousScans:
+                        previousScansTab
+                    }
+                }
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+            .padding(.top, AIscendTheme.Spacing.large)
+            .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
         }
         .preferredColorScheme(.dark)
-        .onAppear {
-            hasAppeared = true
-        }
-    }
-
-    private func heroCard(
-        onBeginCapture: @escaping () -> Void,
-        onOpenLatestResult: @escaping () -> Void
-    ) -> some View {
-        AIscendEditorialHeroCard(
-            eyebrow: "Scan studio",
-            title: "Capture the next clean baseline",
-            subtitle: "AIScend works best when the scan cadence stays disciplined. Keep lighting stable, hit both angles, and treat each capture like calibrated input.",
-            accent: .sky
-        ) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    AIscendStatChip(title: "Archive", value: scanCountLabel, symbol: "camera.aperture", accent: .dawn)
-                    AIscendStatChip(title: "Current read", value: "\(scoreLabel) • \(snapshot.tier)", symbol: "waveform.path.ecg", accent: .sky)
+        .fullScreenCover(isPresented: $showScanFlow) {
+            ScanFlowCoordinatorView(
+                session: model.authSessionStore,
+                badgeManager: model.badgeManager,
+                dailyCheckInStore: model.dailyCheckInStore,
+                notificationManager: model.notificationManager,
+                onOpenRoutine: onOpenRoutine,
+                onOpenChat: onOpenChat,
+                onReturnHome: {
+                    showScanFlow = false
+                },
+                onDismiss: {
+                    showScanFlow = false
                 }
-
-                ZStack(alignment: .bottomLeading) {
-                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color(hex: "161A2A"),
-                                    AIscendTheme.Colors.accentDeep.opacity(0.46),
-                                    Color(hex: "10131B")
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(height: 220)
-
-                    Circle()
-                        .fill(AIscendTheme.Colors.accentGlow.opacity(0.36))
-                        .frame(width: 150, height: 150)
-                        .blur(radius: 28)
-                        .offset(x: 180, y: -30)
-
-                    Circle()
-                        .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
-                        .frame(width: 126, height: 126)
-                        .overlay(
-                            Circle()
-                                .stroke(style: StrokeStyle(lineWidth: 1, dash: [8, 8]))
-                                .foregroundStyle(AIscendTheme.Colors.accentGlow.opacity(0.42))
-                                .padding(18)
-                        )
-                        .overlay(
-                            Image(systemName: "viewfinder")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                        )
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, AIscendTheme.Spacing.large)
-
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        AIscendBadge(
-                            title: model.analysisGoalSummary,
-                            symbol: "scope",
-                            style: .neutral
-                        )
-
-                        Text("Studio preview")
-                            .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
-
-                        Text("A clean capture session creates stronger before/after context and a more trustworthy archive.")
-                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-                    }
-                    .padding(AIscendTheme.Spacing.large)
-                }
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onBeginCapture) {
-                            AIscendButtonLabel(title: "Start Guided Scan", leadingSymbol: "camera.aperture")
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .primary))
-
-                        Button(action: onOpenLatestResult) {
-                            AIscendButtonLabel(title: "Open Latest Result", leadingSymbol: "sparkles.rectangle.stack.fill")
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
-                    }
-
-                    VStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onBeginCapture) {
-                            AIscendButtonLabel(title: "Start Guided Scan", leadingSymbol: "camera.aperture")
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .primary))
-
-                        Button(action: onOpenLatestResult) {
-                            AIscendButtonLabel(title: "Open Latest Result", leadingSymbol: "sparkles.rectangle.stack.fill")
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
-                    }
-                }
-            }
-        }
-    }
-
-    private var statusStrip: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                scanStatTile(
-                    title: "Tier",
-                    value: snapshot.tier,
-                    detail: "Current account read",
-                    symbol: "crown.fill",
-                    accent: .sky
-                )
-
-                scanStatTile(
-                    title: "Streak",
-                    value: "\(snapshot.streakDays)d",
-                    detail: "Calibrated consistency",
-                    symbol: "flame.fill",
-                    accent: .dawn
-                )
-
-                scanStatTile(
-                    title: "Cadence",
-                    value: "4 / mo",
-                    detail: "Recommended baseline tempo",
-                    symbol: "calendar.badge.clock",
-                    accent: .mint
-                )
-            }
-
-            VStack(spacing: AIscendTheme.Spacing.small) {
-                scanStatTile(
-                    title: "Tier",
-                    value: snapshot.tier,
-                    detail: "Current account read",
-                    symbol: "crown.fill",
-                    accent: .sky
-                )
-
-                scanStatTile(
-                    title: "Streak",
-                    value: "\(snapshot.streakDays)d",
-                    detail: "Calibrated consistency",
-                    symbol: "flame.fill",
-                    accent: .dawn
-                )
-
-                scanStatTile(
-                    title: "Cadence",
-                    value: "4 / mo",
-                    detail: "Recommended baseline tempo",
-                    symbol: "calendar.badge.clock",
-                    accent: .mint
-                )
-            }
-        }
-    }
-
-    private var captureProtocol: some View {
-        DashboardGlassCard {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                DashboardSectionHeading(
-                    eyebrow: "Protocol",
-                    title: "What a strong capture session looks like",
-                    subtitle: "Treat the next baseline like controlled data collection. Small improvements in lighting, posture, and framing make the archive read much sharper."
-                )
-
-                VStack(spacing: AIscendTheme.Spacing.medium) {
-                    scanProtocolRow(
-                        symbol: "sun.max.fill",
-                        accent: .dawn,
-                        title: "Controlled lighting",
-                        detail: "Use stable front lighting and keep harsh overhead contrast out of the frame."
-                    )
-                    scanProtocolRow(
-                        symbol: "person.crop.square",
-                        accent: .sky,
-                        title: "Front + profile capture",
-                        detail: "Log a neutral front shot and a clean side profile so structure reads accurately."
-                    )
-                    scanProtocolRow(
-                        symbol: "arrow.up.left.and.down.right.and.arrow.up.right.and.down.left",
-                        accent: .mint,
-                        title: "Composed posture",
-                        detail: "Keep the neck tall, jaw relaxed, and camera level so the read stays consistent across time."
-                    )
-                }
-            }
-        }
-    }
-
-    private var archiveSection: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            DashboardSectionHeading(
-                eyebrow: "Archive",
-                title: "Recent baselines",
-                subtitle: "Your recent captures stay visible here so the progression feels measured instead of abstract."
             )
-
-            DashboardScanArchiveCard(scans: snapshot.scans)
         }
     }
 
-    private var supportSection: some View {
-        DashboardGlassCard(tone: .premium) {
+    private var header: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+            Text("Scan")
+                .aiscendTextStyle(.heroTitle, color: AIscendTheme.Colors.textPrimary)
+
+            Text("Keep it simple. Start a new scan or review your scan archive.")
+                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var newScanTab: some View {
+        DashboardGlassCard(tone: .hero) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack {
-                    AIscendBadge(
-                        title: "Scan strategy",
-                        symbol: "sparkles.rectangle.stack.fill",
-                        style: .accent
-                    )
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                    Text("New Scan")
+                        .aiscendTextStyle(.sectionTitle)
 
-                    Spacer()
+                    Text("Upload a front photo, then a side photo, then send both to the scan engine.")
+                        .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                 }
-
-                AIscendSectionHeader(
-                    title: "Want sharper scan discipline?",
-                    subtitle: "Open the advisor for capture strategy, or tighten the routine so the next baseline reflects cleaner daily execution."
-                )
 
                 HStack(spacing: AIscendTheme.Spacing.small) {
-                    Button(action: onOpenChat) {
-                        AIscendButtonLabel(title: "Ask Advisor", leadingSymbol: "message.fill")
-                    }
-                    .buttonStyle(AIscendButtonStyle(variant: .primary))
+                    scanInfoPill(
+                        title: "Scans",
+                        value: "\(snapshot.scans.count)"
+                    )
 
-                    Button(action: onOpenRoutine) {
-                        AIscendButtonLabel(title: "Tighten Routine", leadingSymbol: "scope")
-                    }
-                    .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    scanInfoPill(
+                        title: "Current",
+                        value: "\(snapshot.score)"
+                    )
                 }
+
+                Button(action: {
+                    showScanFlow = true
+                }) {
+                    AIscendButtonLabel(
+                        title: "Start New Scan",
+                        leadingSymbol: "camera.aperture"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
             }
         }
     }
 
-    private func scanHeroMetric(
-        title: String,
-        value: String,
-        detail: String,
-        symbol: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            AIscendIconOrb(symbol: symbol, accent: .sky, size: 42)
+    private var previousScansTab: some View {
+        DashboardGlassCard {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                Text("Previous Scans")
+                    .aiscendTextStyle(.sectionTitle)
 
+                Text("Blank for now.")
+                    .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.55))
+                    .frame(height: 220)
+                    .overlay(
+                        Text("Previous scans coming soon")
+                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textMuted)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                    )
+            }
+        }
+    }
+
+    private func scanInfoPill(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
             Text(title)
                 .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
 
             Text(value)
                 .aiscendTextStyle(.cardTitle)
-                .lineLimit(2)
-
-            Text(detail)
-                .aiscendTextStyle(.secondaryBody)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AIscendTheme.Spacing.mediumLarge)
-        .aiscendPanel(.muted)
-    }
-
-    private func scanStatTile(
-        title: String,
-        value: String,
-        detail: String,
-        symbol: String,
-        accent: RoutineAccent
-    ) -> some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            AIscendIconOrb(symbol: symbol, accent: accent, size: 42)
-
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
-                Text(value)
-                    .aiscendTextStyle(.metricCompact)
-
-                Text(title)
-                    .aiscendTextStyle(.cardTitle)
-
-                Text(detail)
-                    .aiscendTextStyle(.secondaryBody)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AIscendTheme.Spacing.mediumLarge)
-        .aiscendPanel(.standard)
-    }
-
-    private func scanProtocolRow(
-        symbol: String,
-        accent: RoutineAccent,
-        title: String,
-        detail: String
-    ) -> some View {
-        HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
-            AIscendIconOrb(symbol: symbol, accent: accent, size: 44)
-
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
-                Text(title)
-                    .aiscendTextStyle(.cardTitle)
-
-                Text(detail)
-                    .aiscendTextStyle(.body)
-            }
-
-            Spacer(minLength: 0)
-        }
         .padding(AIscendTheme.Spacing.medium)
         .background(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
-                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.62))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
@@ -382,22 +159,10 @@ struct AIscendScanStudioView: View {
     }
 }
 
-private struct ScanStudioRevealModifier: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let isVisible: Bool
-    let delay: Double
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible || reduceMotion ? 0 : 18)
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.44).delay(delay), value: isVisible)
-    }
-}
-
-private extension View {
-    func scanStudioReveal(isVisible: Bool, delay: Double) -> some View {
-        modifier(ScanStudioRevealModifier(isVisible: isVisible, delay: delay))
+private extension AIscendScanStudioView {
+    enum StudioTab: Hashable {
+        case newScan
+        case previousScans
     }
 }
 
