@@ -8,6 +8,19 @@
 import XCTest
 
 final class AIscendUITests: XCTestCase {
+    private func launchApp(
+        additionalArguments: [String] = []
+    ) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitest-complete-onboarding",
+            "--uitest-force-signed-in",
+            "--uitest-start-tab=scan",
+            "--uitest-disable-daily-photo-prompts"
+        ] + additionalArguments
+        app.launch()
+        return app
+    }
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.
@@ -24,11 +37,27 @@ final class AIscendUITests: XCTestCase {
 
     @MainActor
     func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
-        app.launch()
+        let app = launchApp()
+        XCTAssertTrue(app.otherElements["scan-studio-new-scan-root"].waitForExistence(timeout: 5))
+    }
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+    @MainActor
+    func testScanStudioLoadsPreviousScansWhenToggleIsTapped() throws {
+        let app = launchApp()
+        let sortLabel = app.staticTexts["Sort"]
+        XCTAssertTrue(app.otherElements["scan-studio-new-scan-root"].waitForExistence(timeout: 5))
+
+        let previousScansButton = app.buttons["scan-studio-tab-previousScans"]
+
+        XCTAssertTrue(previousScansButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(previousScansButton.isHittable)
+        XCTAssertFalse(sortLabel.exists)
+
+        previousScansButton.tap()
+
+        expectation(for: NSPredicate(format: "value == %@", "Selected"), evaluatedWith: previousScansButton)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(sortLabel.waitForExistence(timeout: 5))
     }
 
     @MainActor

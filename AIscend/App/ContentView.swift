@@ -50,30 +50,44 @@ private struct SessionLoadingView: View {
     var body: some View {
         ZStack {
             AIscendBackdrop()
+            DashboardAmbientLayer()
 
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                AIscendBrandMark(size: 60)
+            VStack(spacing: AIscendTheme.Spacing.large) {
+                ZStack {
+                    Circle()
+                        .fill(AIscendTheme.Colors.accentPrimary.opacity(0.14))
+                        .frame(width: 118, height: 118)
+                        .blur(radius: 12)
 
-                AIscendBadge(
-                    title: "Secure Session",
-                    symbol: "lock.shield.fill",
-                    style: .accent
-                )
+                    Circle()
+                        .fill(AIscendTheme.Colors.surfaceGlass.opacity(0.82))
+                        .frame(width: 96, height: 96)
+                        .overlay(
+                            Circle()
+                                .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
+                        )
 
-                AIscendLoadingIndicator()
+                    AIscendBrandMark(size: 54)
+                }
 
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                    Text("Restoring your private workspace")
-                        .aiscendTextStyle(.sectionTitle)
+                VStack(spacing: AIscendTheme.Spacing.xSmall) {
+                    Text("AIscend")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
-                    Text("AIScend is re-establishing the session, validating your auth state, and loading the dashboard context.")
-                        .aiscendTextStyle(.body)
+                    Text("Loading your workspace")
+                        .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                }
+
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendLoadingIndicator(size: 18, lineWidth: 2)
+
+                    Text("Restoring session")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
                 }
             }
-            .frame(maxWidth: 460, alignment: .leading)
-            .padding(AIscendTheme.Spacing.xLarge)
-            .aiscendPanel(.hero)
-            .padding(AIscendTheme.Spacing.screenInset)
+            .frame(maxWidth: 320)
+            .padding(.horizontal, AIscendTheme.Spacing.large)
         }
     }
 }

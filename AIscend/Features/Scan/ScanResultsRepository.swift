@@ -13,6 +13,7 @@ import FirebaseFirestore
 
 protocol ScanResultsRepositoryProtocol: Sendable {
     func loadLatestPersistedResult() async -> PersistedScanRecord?
+    func loadPersistedArchive() async -> [PersistedScanRecord]
     func storeLatestPersistedResult(_ result: PersistedScanRecord?) async
     func autoSaveFreshResultIfNeeded(
         _ result: PersistedScanRecord,
@@ -23,7 +24,12 @@ protocol ScanResultsRepositoryProtocol: Sendable {
 actor ScanResultsRepository: ScanResultsRepositoryProtocol {
     private enum Keys {
         static let latestResult = "aiscend.latestScanResult"
+        static let archivedResults = "aiscend.archivedScanResults"
         static let savedScanIDs = "aiscend.savedScanIDs"
+    }
+
+    private enum Constants {
+        static let maxArchivedResults = 24
     }
 
     private let defaults: UserDefaults
@@ -52,6 +58,29 @@ actor ScanResultsRepository: ScanResultsRepositoryProtocol {
     }
 
     func loadLatestPersistedResult() async -> PersistedScanRecord? {
+        loadLatestPersistedResultFromDefaults()
+    }
+
+    func loadPersistedArchive() async -> [PersistedScanRecord] {
+        var archivedResults = loadArchivedResults()
+
+        if let latestResult = loadLatestPersistedResultFromDefaults(),
+           latestResult.isDisplayable
+        {
+            if let existingIndex = archivedResults.firstIndex(where: { archiveMatches($0, latestResult) }) {
+                archivedResults[existingIndex] = mergeArchivedRecord(
+                    archivedResults[existingIndex],
+                    with: latestResult
+                )
+            } else {
+                archivedResults.append(normalizedArchivedRecord(latestResult))
+            }
+        }
+
+        return archivedResults.sorted(by: archiveSort)
+    }
+
+    private func loadLatestPersistedResultFromDefaults() -> PersistedScanRecord? {
         guard let data = defaults.data(forKey: Keys.latestResult) else {
             return nil
         }
@@ -70,6 +99,7 @@ actor ScanResultsRepository: ScanResultsRepositoryProtocol {
         }
 
         defaults.set(encoded, forKey: Keys.latestResult)
+        storeArchivedResult(result)
     }
 
     func autoSaveFreshResultIfNeeded(
@@ -156,6 +186,114 @@ actor ScanResultsRepository: ScanResultsRepositoryProtocol {
         var savedScanIDs = savedScanIDsByFingerprint()
         savedScanIDs[fingerprint] = scanID
         defaults.set(savedScanIDs, forKey: Keys.savedScanIDs)
+    }
+
+    private func loadArchivedResults() -> [PersistedScanRecord] {
+        guard let data = defaults.data(forKey: Keys.archivedResults),
+              let decoded = try? decoder.decode([PersistedScanRecord].self, from: data)
+        else {
+            return []
+        }
+
+        return decoded
+            .filter(\.isDisplayable)
+            .sorted(by: archiveSort)
+    }
+
+    private func storeArchivedResult(_ result: PersistedScanRecord) {
+        guard result.isDisplayable else {
+            return
+        }
+
+        var archivedResults = loadArchivedResults()
+        let normalizedResult = normalizedArchivedRecord(result)
+
+        if let existingIndex = archivedResults.firstIndex(where: { archiveMatches($0, normalizedResult) }) {
+            archivedResults[existingIndex] = mergeArchivedRecord(
+                archivedResults[existingIndex],
+                with: normalizedResult
+            )
+        } else {
+            archivedResults.append(normalizedResult)
+        }
+
+        archivedResults.sort(by: archiveSort)
+
+        if archivedResults.count > Constants.maxArchivedResults {
+            archivedResults = Array(archivedResults.prefix(Constants.maxArchivedResults))
+        }
+
+        guard let encoded = try? encoder.encode(archivedResults) else {
+            return
+        }
+
+        defaults.set(encoded, forKey: Keys.archivedResults)
+    }
+
+    private func archiveMatches(_ lhs: PersistedScanRecord, _ rhs: PersistedScanRecord) -> Bool {
+        if let lhsScanID = lhs.meta.scanId?.trimmedNonEmpty,
+           let rhsScanID = rhs.meta.scanId?.trimmedNonEmpty,
+           lhsScanID == rhsScanID
+        {
+            return true
+        }
+
+        return lhs.archiveFingerprint == rhs.archiveFingerprint
+    }
+
+    private func mergeArchivedRecord(
+        _ existing: PersistedScanRecord,
+        with incoming: PersistedScanRecord
+    ) -> PersistedScanRecord {
+        let existingDate = existing.savedAt ?? .distantPast
+        let incomingDate = incoming.savedAt ?? .distantPast
+
+        var merged = incomingDate >= existingDate ? incoming : existing
+        let fallback = incomingDate >= existingDate ? existing : incoming
+
+        if merged.meta.frontUrl?.trimmedNonEmpty == nil {
+            merged.meta.frontUrl = fallback.meta.frontUrl
+        }
+
+        if merged.meta.sideUrl?.trimmedNonEmpty == nil {
+            merged.meta.sideUrl = fallback.meta.sideUrl
+        }
+
+        if merged.meta.email?.trimmedNonEmpty == nil {
+            merged.meta.email = fallback.meta.email
+        }
+
+        if merged.meta.type?.trimmedNonEmpty == nil {
+            merged.meta.type = fallback.meta.type
+        }
+
+        if merged.meta.scanId?.trimmedNonEmpty == nil {
+            merged.meta.scanId = fallback.meta.scanId
+        }
+
+        if merged.meta.source?.trimmedNonEmpty == nil {
+            merged.meta.source = fallback.meta.source
+        }
+
+        if merged.savedAt == nil {
+            merged.savedAt = fallback.savedAt
+        }
+
+        return merged
+    }
+
+    private func normalizedArchivedRecord(_ result: PersistedScanRecord) -> PersistedScanRecord {
+        var normalized = result
+
+        if normalized.savedAt == nil {
+            normalized.savedAt = .now
+        }
+
+        return normalized
+    }
+
+    private func archiveSort(_ lhs: PersistedScanRecord, _ rhs: PersistedScanRecord) -> Bool {
+        (lhs.savedAt ?? .distantPast) > (rhs.savedAt ?? .distantPast)
     }
 }
 

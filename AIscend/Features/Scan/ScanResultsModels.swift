@@ -435,6 +435,16 @@ struct PersistedScanRecord: Codable, Hashable, Sendable {
         ].joined(separator: "|")
     }
 
+    var archiveFingerprint: String {
+        [
+            meta.frontUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            meta.sideUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            meta.email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? "",
+            meta.type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? "",
+            String(format: "%.1f", overallScore)
+        ].joined(separator: "|")
+    }
+
     static let previewFree = PersistedScanRecord(
         payload: ScanPayload(
             scores: ScanScores(overall: 71, potential: 83, eyes: 74, skin: 68, jaw: 79, side: 76),

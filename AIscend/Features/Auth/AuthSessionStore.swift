@@ -100,7 +100,25 @@ final class AuthSessionStore {
     private var authStateHandle: AuthStateDidChangeListenerHandle?
     #endif
 
-    init() {
+    init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+        if arguments.contains("--uitest-force-signed-in") {
+            phase = .signedIn
+            user = SessionUser(
+                id: "ui-test-user",
+                displayName: "UI Test User",
+                email: "uitest@aiscend.local",
+                providerLabels: ["UI Test"],
+                photoURL: nil
+            )
+            return
+        }
+
+        if arguments.contains("--uitest-force-signed-out") {
+            phase = .signedOut
+            user = nil
+            return
+        }
+
         refreshAvailability()
         beginListeningIfNeeded()
     }

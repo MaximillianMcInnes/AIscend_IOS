@@ -260,6 +260,15 @@ struct RoutineProfile: Codable, Equatable {
     }
 }
 
+struct RoutineTrackerState: Codable, Equatable {
+    var waterIntake: Int = 0
+    var waterGoal: Int = 8
+    var caloriesLogged: Int = 0
+    var calorieGoal: Int = 2200
+    var exerciseMinutes: Int = 0
+    var exerciseGoalMinutes: Int = 45
+}
+
 struct RoutineStep: Identifiable, Hashable {
     let id: String
     let title: String
@@ -285,6 +294,7 @@ final class AppModel {
         static let routineProfile = "routineProfile"
         static let completedStepIDs = "completedStepIDs"
         static let routineXP = "routineXP"
+        static let trackerState = "trackerState"
     }
 
     private enum GlobalKeys {
@@ -356,6 +366,16 @@ final class AppModel {
         }
     }
 
+    var trackerState: RoutineTrackerState {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            persistTrackerState()
+        }
+    }
+
     var profileAvatarURL: URL? {
         guard let relativePath = profile.avatarRelativePath else {
             return nil
@@ -379,16 +399,28 @@ final class AppModel {
             defaults.removeObject(forKey: GlobalKeys.analysisGoals)
             defaults.removeObject(forKey: Keys.hasCompletedOnboarding)
             defaults.removeObject(forKey: Keys.routineProfile)
+            defaults.removeObject(forKey: Keys.trackerState)
             defaults.removeObject(forKey: Self.namespacedKey(Keys.hasCompletedOnboarding, namespace: initialNamespace))
             defaults.removeObject(forKey: Self.namespacedKey(Keys.routineProfile, namespace: initialNamespace))
+            defaults.removeObject(forKey: Self.namespacedKey(Keys.trackerState, namespace: initialNamespace))
         }
 
         hasCompletedEntryOnboarding = false
         analysisGoals = AnalysisGoal.defaultSelection
         hasCompletedOnboarding = false
         profile = RoutineProfile()
+        trackerState = RoutineTrackerState()
         restoreGlobalState()
         restorePersistedState()
+
+        if arguments.contains("--uitest-complete-entry-onboarding") {
+            hasCompletedEntryOnboarding = true
+        }
+
+        if arguments.contains("--uitest-complete-onboarding") {
+            hasCompletedEntryOnboarding = true
+            hasCompletedOnboarding = true
+        }
     }
 
     var greeting: String {
@@ -456,6 +488,16 @@ final class AppModel {
         default:
             "Mastery"
         }
+    }
+
+    var trackerCompletionCount: Int {
+        [
+            trackerState.waterIntake > 0,
+            trackerState.caloriesLogged > 0,
+            trackerState.exerciseMinutes > 0
+        ]
+        .filter { $0 }
+        .count
     }
 
     var dailyRoutineSections: [RoutineSection] {
@@ -631,6 +673,18 @@ final class AppModel {
         completedStepIDs.removeAll()
     }
 
+    func adjustWaterIntake(by amount: Int) {
+        trackerState.waterIntake = max(0, trackerState.waterIntake + amount)
+    }
+
+    func adjustCalories(by amount: Int) {
+        trackerState.caloriesLogged = max(0, trackerState.caloriesLogged + amount)
+    }
+
+    func adjustExerciseMinutes(by amount: Int) {
+        trackerState.exerciseMinutes = max(0, trackerState.exerciseMinutes + amount)
+    }
+
     private func step(
         id: String,
         title: String,
@@ -654,6 +708,14 @@ final class AppModel {
         }
 
         defaults.set(data, forKey: namespacedKey(Keys.routineProfile))
+    }
+
+    private func persistTrackerState() {
+        guard let data = try? JSONEncoder().encode(trackerState) else {
+            return
+        }
+
+        defaults.set(data, forKey: namespacedKey(Keys.trackerState))
     }
 
     private func persistCompletedStepIDs() {
@@ -757,6 +819,16 @@ final class AppModel {
         } else {
             routineXP = 0
         }
+
+        let trackerKey = namespacedKey(Keys.trackerState)
+        if
+            let data = defaults.data(forKey: trackerKey),
+            let decoded = try? JSONDecoder().decode(RoutineTrackerState.self, from: data)
+        {
+            trackerState = decoded
+        } else {
+            trackerState = RoutineTrackerState()
+        }
     }
 
     private func migrateLegacyStateIfNeeded(to userID: String?) {
@@ -769,7 +841,8 @@ final class AppModel {
             defaults.object(forKey: namespacedKey(Keys.hasCompletedOnboarding, namespace: destinationNamespace)) != nil ||
             defaults.data(forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace)) != nil ||
             defaults.data(forKey: namespacedKey(Keys.completedStepIDs, namespace: destinationNamespace)) != nil ||
-            defaults.object(forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace)) != nil
+            defaults.object(forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace)) != nil ||
+            defaults.data(forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace)) != nil
 
         guard !hasDestinationState else {
             return
@@ -779,6 +852,7 @@ final class AppModel {
         let guestProfileKey = Self.namespacedKey(Keys.routineProfile, namespace: "guest")
         let guestCompletedKey = Self.namespacedKey(Keys.completedStepIDs, namespace: "guest")
         let guestXPKey = Self.namespacedKey(Keys.routineXP, namespace: "guest")
+        let guestTrackerKey = Self.namespacedKey(Keys.trackerState, namespace: "guest")
 
         if let guestOnboarding = defaults.object(forKey: guestOnboardingKey) {
             defaults.set(guestOnboarding, forKey: namespacedKey(Keys.hasCompletedOnboarding, namespace: destinationNamespace))
@@ -798,6 +872,12 @@ final class AppModel {
 
         if let guestXP = defaults.object(forKey: guestXPKey) {
             defaults.set(guestXP, forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace))
+        }
+
+        if let guestTracker = defaults.data(forKey: guestTrackerKey) {
+            defaults.set(guestTracker, forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace))
+        } else if let legacyTracker = defaults.data(forKey: Keys.trackerState) {
+            defaults.set(legacyTracker, forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace))
         }
     }
 

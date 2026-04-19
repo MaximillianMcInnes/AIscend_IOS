@@ -3,11 +3,14 @@
 //  AIscend
 //
 
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
 
 struct ScanCapturePageView: View {
+    @Environment(\.openURL) private var openURL
+
     let title: String
     let subtitle: String
     let image: UIImage?
@@ -22,6 +25,12 @@ struct ScanCapturePageView: View {
 
     @State private var pickerItem: PhotosPickerItem?
     @State private var isLoading = false
+    @State private var showingCameraCapture = false
+    @State private var cameraAlert: ScanPageCameraAlert?
+
+    private var canUseCamera: Bool {
+        UIImagePickerController.isSourceTypeAvailable(.camera)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -57,16 +66,16 @@ struct ScanCapturePageView: View {
                                         .frame(maxWidth: .infinity)
                                         .clipped()
                                         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-                                } else {
-                                    VStack(spacing: AIscendTheme.Spacing.small) {
-                                        Image(systemName: symbol)
-                                            .font(.system(size: 42, weight: .medium))
-                                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                            } else {
+                                VStack(spacing: AIscendTheme.Spacing.small) {
+                                    Image(systemName: symbol)
+                                        .font(.system(size: 42, weight: .medium))
+                                        .foregroundStyle(AIscendTheme.Colors.accentGlow)
 
                                         Text("No image selected")
                                             .aiscendTextStyle(.cardTitle)
 
-                                        Text("Choose a photo from your library.")
+                                        Text("Take a photo in the app or choose one from your library.")
                                             .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                                     }
                                     .padding(AIscendTheme.Spacing.large)
@@ -85,13 +94,25 @@ struct ScanCapturePageView: View {
                                     .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
                             )
 
+                            if canUseCamera {
+                                Button(action: startCameraCapture) {
+                                    AIscendButtonLabel(
+                                        title: image == nil ? "Take Photo" : "Retake Photo",
+                                        leadingSymbol: "camera.fill"
+                                    )
+                                }
+                                .buttonStyle(AIscendButtonStyle(variant: .primary))
+                            }
+
                             PhotosPicker(selection: $pickerItem, matching: .images) {
                                 AIscendButtonLabel(
                                     title: buttonTitle,
                                     leadingSymbol: "photo.badge.plus"
                                 )
                             }
-                            .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                            .buttonStyle(
+                                AIscendButtonStyle(variant: canUseCamera ? .secondary : .primary)
+                            )
 
                             if let onContinue {
                                 Button(action: onContinue) {
@@ -115,6 +136,38 @@ struct ScanCapturePageView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $showingCameraCapture) {
+            AIscendEditedCameraPicker(
+                onImagePicked: { image in
+                    showingCameraCapture = false
+                    importCapturedPhoto(image)
+                },
+                onCancel: {
+                    showingCameraCapture = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .alert(item: $cameraAlert) { alert in
+            switch alert {
+            case .unavailable:
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("OK"))
+                )
+
+            case .denied:
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    primaryButton: .default(Text("Settings")) {
+                        openAppSettings()
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+        }
         .onChange(of: pickerItem) { _, newValue in
             guard let newValue else { return }
             Task {
@@ -182,13 +235,87 @@ struct ScanCapturePageView: View {
             }
 
             await MainActor.run {
-                onPickImage(image, compressed)
-                isLoading = false
+                finishImport(image: image, data: compressed)
             }
         } catch {
             await MainActor.run {
                 isLoading = false
             }
+        }
+    }
+
+    private func startCameraCapture() {
+        guard canUseCamera else {
+            cameraAlert = .unavailable
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            showingCameraCapture = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        showingCameraCapture = true
+                    } else {
+                        cameraAlert = .denied
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAlert = .denied
+        @unknown default:
+            cameraAlert = .unavailable
+        }
+    }
+
+    private func importCapturedPhoto(_ image: UIImage) {
+        isLoading = true
+
+        guard let compressed = image.jpegData(compressionQuality: 0.88) else {
+            isLoading = false
+            return
+        }
+
+        finishImport(image: image, data: compressed)
+    }
+
+    private func finishImport(image: UIImage, data: Data) {
+        onPickImage(image, data)
+        isLoading = false
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            return
+        }
+
+        openURL(url)
+    }
+}
+
+private enum ScanPageCameraAlert: Int, Identifiable {
+    case unavailable
+    case denied
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .unavailable:
+            "Camera Unavailable"
+        case .denied:
+            "Camera Access Needed"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unavailable:
+            "This device does not have a camera available for in-app scan capture."
+        case .denied:
+            "Allow camera access in Settings to capture and crop scan photos without leaving the app."
         }
     }
 }

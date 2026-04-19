@@ -21,15 +21,37 @@ struct AppShellView: View {
 private enum RoutineWorkspaceTab: String, CaseIterable, Identifiable {
     case daily
     case plan
+    case trackers
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .daily:
-            "Daily Routine"
+            "Daily"
         case .plan:
             "Plan"
+        case .trackers:
+            "Trackers"
+        }
+    }
+}
+
+private enum RoutineTrackerTab: String, CaseIterable, Identifiable {
+    case water
+    case calories
+    case exercise
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .water:
+            "Water"
+        case .calories:
+            "Calories"
+        case .exercise:
+            "Exercise"
         }
     }
 }
@@ -43,6 +65,7 @@ struct RoutineCleanSlateView: View {
     let onRefine: () -> Void
 
     @State private var selectedTab: RoutineWorkspaceTab = .daily
+    @State private var selectedTrackerTab: RoutineTrackerTab = .water
 
     var body: some View {
         ZStack {
@@ -52,13 +75,8 @@ struct RoutineCleanSlateView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                     routineHeader
-                    routineHero
-
-                    if selectedTab == .daily {
-                        dailyRoutineTab
-                    } else {
-                        planTab
-                    }
+                    routineTabBar
+                    selectedRoutineContent
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
@@ -80,8 +98,26 @@ struct RoutineCleanSlateView: View {
                 .font(.system(size: 40, weight: .bold, design: .rounded))
                 .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
-            Text("A calmer routine surface with one tab for execution and one for the plan behind it.")
+            Text("A calmer routine surface with one tab for execution, one for planning, and one for health tracking.")
                 .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+        }
+    }
+
+    private var routineTabBar: some View {
+        RoutineWorkspaceToggle(selection: $selectedTab)
+    }
+
+    @ViewBuilder
+    private var selectedRoutineContent: some View {
+        routineHero
+
+        switch selectedTab {
+        case .daily:
+            dailyRoutineTab
+        case .plan:
+            planTab
+        case .trackers:
+            trackersTab
         }
     }
 
@@ -89,19 +125,15 @@ struct RoutineCleanSlateView: View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
             HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                    Text(selectedTab == .daily ? "Today's progress" : "Your operating plan")
+                    Text(routineHeroEyebrow)
                         .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
 
-                    Text(selectedTab == .daily ? "\(model.completedRoutineCount)/\(max(model.totalRoutineCount, 1)) complete" : model.profile.focusTrack.title)
+                    Text(routineHeroTitle)
                         .font(.system(size: 30, weight: .bold, design: .rounded))
                         .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
-                    Text(
-                        selectedTab == .daily
-                            ? (model.nextOpenStep?.detail ?? "Everything is handled. Keep the streak protected and close the day cleanly.")
-                            : model.profile.intention
-                    )
-                    .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                    Text(routineHeroDetail)
+                        .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                 }
 
                 Spacer(minLength: 0)
@@ -129,8 +161,6 @@ struct RoutineCleanSlateView: View {
 
                 RoutineSlateProgressBar(progress: max(model.xpProgress, 0.04))
             }
-
-            RoutineWorkspaceToggle(selection: $selectedTab)
         }
         .padding(AIscendTheme.Spacing.xLarge)
         .background(
@@ -151,6 +181,39 @@ struct RoutineCleanSlateView: View {
                 .stroke(AIscendTheme.Colors.accentGlow.opacity(0.18), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.42), radius: 28, x: 0, y: 18)
+    }
+
+    private var routineHeroEyebrow: String {
+        switch selectedTab {
+        case .daily:
+            "Today's progress"
+        case .plan:
+            "Your operating plan"
+        case .trackers:
+            "Daily tracking"
+        }
+    }
+
+    private var routineHeroTitle: String {
+        switch selectedTab {
+        case .daily:
+            "\(model.completedRoutineCount)/\(max(model.totalRoutineCount, 1)) complete"
+        case .plan:
+            model.profile.focusTrack.title
+        case .trackers:
+            "\(model.trackerCompletionCount)/3 trackers live"
+        }
+    }
+
+    private var routineHeroDetail: String {
+        switch selectedTab {
+        case .daily:
+            model.nextOpenStep?.detail ?? "Everything is handled. Keep the streak protected and close the day cleanly."
+        case .plan:
+            model.profile.intention
+        case .trackers:
+            "Keep water, calories, and exercise visible so the basics stay easy to log on busy days."
+        }
     }
 
     private var dailyRoutineTab: some View {
@@ -302,6 +365,196 @@ struct RoutineCleanSlateView: View {
         }
     }
 
+    private var trackersTab: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    RoutineSlateMetric(
+                        title: "Water",
+                        value: "\(model.trackerState.waterIntake)",
+                        detail: "of \(model.trackerState.waterGoal) cups",
+                        accent: .mint
+                    )
+
+                    RoutineSlateMetric(
+                        title: "Calories",
+                        value: "\(model.trackerState.caloriesLogged)",
+                        detail: "of \(model.trackerState.calorieGoal) kcal",
+                        accent: .dawn
+                    )
+
+                    RoutineSlateMetric(
+                        title: "Exercise",
+                        value: "\(model.trackerState.exerciseMinutes)m",
+                        detail: "of \(model.trackerState.exerciseGoalMinutes)m goal",
+                        accent: .sky
+                    )
+                }
+
+                VStack(spacing: AIscendTheme.Spacing.small) {
+                    RoutineSlateMetric(
+                        title: "Water",
+                        value: "\(model.trackerState.waterIntake)",
+                        detail: "of \(model.trackerState.waterGoal) cups",
+                        accent: .mint
+                    )
+
+                    RoutineSlateMetric(
+                        title: "Calories",
+                        value: "\(model.trackerState.caloriesLogged)",
+                        detail: "of \(model.trackerState.calorieGoal) kcal",
+                        accent: .dawn
+                    )
+
+                    RoutineSlateMetric(
+                        title: "Exercise",
+                        value: "\(model.trackerState.exerciseMinutes)m",
+                        detail: "of \(model.trackerState.exerciseGoalMinutes)m goal",
+                        accent: .sky
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                AIscendSectionHeader(
+                    eyebrow: "Trackers",
+                    title: "Log the basics",
+                    subtitle: "Switch between water, calories, and exercise without leaving the routine page."
+                )
+
+                RoutineTrackerToggle(selection: $selectedTrackerTab)
+            }
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.standard)
+
+            switch selectedTrackerTab {
+            case .water:
+                waterTrackerCard
+            case .calories:
+                calorieTrackerCard
+            case .exercise:
+                exerciseTrackerCard
+            }
+        }
+    }
+
+    private var waterTrackerCard: some View {
+        RoutineTrackerDetailCard(
+            eyebrow: "Water",
+            title: "\(model.trackerState.waterIntake) of \(model.trackerState.waterGoal) cups",
+            subtitle: "Log each glass so hydration is visible instead of becoming a vague intention.",
+            accent: .mint,
+            progress: trackerProgress(model.trackerState.waterIntake, goal: model.trackerState.waterGoal),
+            progressLabel: "\(max(model.trackerState.waterGoal - model.trackerState.waterIntake, 0)) cups remaining",
+            stats: [
+                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.waterIntake) cups", symbol: "drop.fill", accent: .mint),
+                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.waterGoal) cups", symbol: "target", accent: .sky),
+                RoutineTrackerStat(title: "Status", value: model.trackerState.waterIntake >= model.trackerState.waterGoal ? "Goal hit" : "In progress", symbol: "sparkles", accent: .dawn)
+            ],
+            actions: [
+                RoutineTrackerAction(
+                    id: "water-minus",
+                    title: "Remove 1 Cup",
+                    symbol: "minus",
+                    variant: .secondary,
+                    action: { model.adjustWaterIntake(by: -1) }
+                ),
+                RoutineTrackerAction(
+                    id: "water-plus",
+                    title: "Add 1 Cup",
+                    symbol: "plus",
+                    variant: .primary,
+                    action: { model.adjustWaterIntake(by: 1) }
+                )
+            ]
+        )
+    }
+
+    private var calorieTrackerCard: some View {
+        RoutineTrackerDetailCard(
+            eyebrow: "Calories",
+            title: "\(model.trackerState.caloriesLogged) kcal logged",
+            subtitle: "Keep food intake easy to update so your plan has an anchor instead of a guess.",
+            accent: .dawn,
+            progress: trackerProgress(model.trackerState.caloriesLogged, goal: model.trackerState.calorieGoal),
+            progressLabel: calorieProgressLabel,
+            stats: [
+                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.caloriesLogged) kcal", symbol: "fork.knife", accent: .dawn),
+                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.calorieGoal) kcal", symbol: "target", accent: .sky),
+                RoutineTrackerStat(title: "Status", value: calorieStatusLabel, symbol: "flame.fill", accent: .mint)
+            ],
+            actions: [
+                RoutineTrackerAction(
+                    id: "calories-minus",
+                    title: "Remove 100 Kcal",
+                    symbol: "minus",
+                    variant: .secondary,
+                    action: { model.adjustCalories(by: -100) }
+                ),
+                RoutineTrackerAction(
+                    id: "calories-plus",
+                    title: "Add 100 Kcal",
+                    symbol: "plus",
+                    variant: .primary,
+                    action: { model.adjustCalories(by: 100) }
+                )
+            ]
+        )
+    }
+
+    private var exerciseTrackerCard: some View {
+        RoutineTrackerDetailCard(
+            eyebrow: "Exercise",
+            title: "\(model.trackerState.exerciseMinutes) min logged",
+            subtitle: "Use this tab to keep movement visible even when the rest of the day gets noisy.",
+            accent: .sky,
+            progress: trackerProgress(model.trackerState.exerciseMinutes, goal: model.trackerState.exerciseGoalMinutes),
+            progressLabel: "\(max(model.trackerState.exerciseGoalMinutes - model.trackerState.exerciseMinutes, 0)) min remaining",
+            stats: [
+                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.exerciseMinutes) min", symbol: "figure.run", accent: .sky),
+                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.exerciseGoalMinutes) min", symbol: "target", accent: .mint),
+                RoutineTrackerStat(title: "Status", value: model.trackerState.exerciseMinutes >= model.trackerState.exerciseGoalMinutes ? "Goal hit" : "Still moving", symbol: "bolt.fill", accent: .dawn)
+            ],
+            actions: [
+                RoutineTrackerAction(
+                    id: "exercise-minus",
+                    title: "Remove 5 Min",
+                    symbol: "minus",
+                    variant: .secondary,
+                    action: { model.adjustExerciseMinutes(by: -5) }
+                ),
+                RoutineTrackerAction(
+                    id: "exercise-plus",
+                    title: "Add 15 Min",
+                    symbol: "plus",
+                    variant: .primary,
+                    action: { model.adjustExerciseMinutes(by: 15) }
+                )
+            ]
+        )
+    }
+
+    private var calorieProgressLabel: String {
+        let remaining = model.trackerState.calorieGoal - model.trackerState.caloriesLogged
+        return remaining >= 0 ? "\(remaining) kcal remaining" : "\(abs(remaining)) kcal above target"
+    }
+
+    private var calorieStatusLabel: String {
+        if model.trackerState.caloriesLogged == 0 {
+            return "Not started"
+        }
+
+        return model.trackerState.caloriesLogged > model.trackerState.calorieGoal ? "Above target" : "On track"
+    }
+
+    private func trackerProgress(_ value: Int, goal: Int) -> Double {
+        guard goal > 0 else {
+            return 0
+        }
+
+        return min(max(Double(value) / Double(goal), 0), 1)
+    }
+
     private func routineChecklistRow(_ step: RoutineStep) -> some View {
         Button {
             withAnimation(AIscendTheme.Motion.reveal) {
@@ -421,48 +674,188 @@ private struct RoutineWorkspaceToggle: View {
     }
 }
 
+private struct RoutineTrackerToggle: View {
+    @Binding var selection: RoutineTrackerTab
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(RoutineTrackerTab.allCases) { tab in
+                Button {
+                    withAnimation(AIscendTheme.Motion.reveal) {
+                        selection = tab
+                    }
+                } label: {
+                    Text(tab.title)
+                        .aiscendTextStyle(.caption, color: selection == tab ? .white : AIscendTheme.Colors.textSecondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(
+                                    selection == tab
+                                        ? AnyShapeStyle(RoutineAccent.mint.gradient)
+                                        : AnyShapeStyle(Color.clear)
+                                )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(
+                                    selection == tab ? AIscendTheme.Colors.accentGlow.opacity(0.5) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.black.opacity(0.24))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct RoutineTrackerStat: Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let symbol: String
+    let accent: RoutineAccent
+
+    init(title: String, value: String, symbol: String, accent: RoutineAccent) {
+        self.id = title
+        self.title = title
+        self.value = value
+        self.symbol = symbol
+        self.accent = accent
+    }
+}
+
+private struct RoutineTrackerAction: Identifiable {
+    let id: String
+    let title: String
+    let symbol: String
+    let variant: AIscendButtonVariant
+    let action: () -> Void
+}
+
+private struct RoutineTrackerDetailCard: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let accent: RoutineAccent
+    let progress: Double
+    let progressLabel: String
+    let stats: [RoutineTrackerStat]
+    let actions: [RoutineTrackerAction]
+
+    var body: some View {
+        AIscendEditorialHeroCard(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            accent: accent
+        ) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    HStack {
+                        Text("Progress")
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                        Spacer()
+
+                        Text(progressLabel)
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                    }
+
+                    RoutineSlateProgressBar(progress: max(progress, 0.04))
+                }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        ForEach(stats) { stat in
+                            AIscendStatChip(
+                                title: stat.title,
+                                value: stat.value,
+                                symbol: stat.symbol,
+                                accent: stat.accent
+                            )
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        ForEach(stats) { stat in
+                            AIscendStatChip(
+                                title: stat.title,
+                                value: stat.value,
+                                symbol: stat.symbol,
+                                accent: stat.accent
+                            )
+                        }
+                    }
+                }
+
+                VStack(spacing: AIscendTheme.Spacing.small) {
+                    ForEach(actions) { action in
+                        Button(action: action.action) {
+                            AIscendButtonLabel(title: action.title, leadingSymbol: action.symbol)
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: action.variant))
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct MoreHubView: View {
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
     @ObservedObject var badgeManager: BadgeManager
     @ObservedObject var notificationManager: NotificationManager
-
-    @State private var showingDailyCheckIn = false
-    @State private var showingStreaks = false
-
-    private var displayName: String {
-        session.user?.displayName ?? model.profile.displayName
-    }
-
-    private var subtitle: String {
-        session.user?.subtitle ?? "Your private AIscend workspace"
-    }
-
-    private var initials: String {
-        session.user?.initials ?? String(model.profile.displayName.prefix(2)).uppercased()
-    }
+    @State private var selectedTab: MoreHubTab = .profile
 
     var body: some View {
         ZStack {
             AIscendBackdrop()
             DashboardAmbientLayer()
 
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                    moreHubHeader
-                    moreHubSpotlight
-                    moreHubDestinations
-                    moreHubPulse
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    NavigationLink(value: MoreHubDestination.profile) {
+                        MoreHubTabChip(tab: .profile, isSelected: selectedTab == .profile)
+                    }
+                    .simultaneousGesture(TapGesture().onEnded {
+                        selectedTab = .profile
+                    })
+                    .buttonStyle(.plain)
+
+                    ForEach(MoreHubTab.placeholderTabs) { tab in
+                        Button {
+                            selectedTab = tab
+                        } label: {
+                            MoreHubTabChip(tab: tab, isSelected: selectedTab == tab)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
                 .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+
+                Spacer(minLength: 0)
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(for: MoreHubSection.self) { section in
-            switch section {
+        .navigationDestination(for: MoreHubDestination.self) { destination in
+            switch destination {
             case .profile:
                 AccountView(
                     model: model,
@@ -471,313 +864,74 @@ struct MoreHubView: View {
                     badgeManager: badgeManager,
                     notificationManager: notificationManager
                 )
-            case .lookalike, .skinLab, .threeDLab:
-                MoreLabDetailView(section: section)
-            }
-        }
-        .task {
-            await notificationManager.refreshAuthorizationStatus()
-        }
-        .sheet(isPresented: $showingDailyCheckIn) {
-            DailyCheckInView(
-                dailyCheckInStore: dailyCheckInStore,
-                badgeManager: badgeManager,
-                notificationManager: notificationManager,
-                isPremium: badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked }),
-                onComplete: {},
-                onDismiss: { showingDailyCheckIn = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingStreaks) {
-            StreaksView(
-                dailyCheckInStore: dailyCheckInStore,
-                badgeManager: badgeManager,
-                notificationManager: notificationManager,
-                onOpenCheckIn: {
-                    showingStreaks = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                        showingDailyCheckIn = true
-                    }
-                },
-                onDismiss: { showingStreaks = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-    }
-
-    private var moreHubHeader: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            AIscendBadge(
-                title: "More",
-                symbol: "square.grid.2x2.fill",
-                style: .neutral
-            )
-
-            Text("Profile + Labs")
-                .font(.system(size: 36, weight: .bold, design: .rounded))
-                .foregroundStyle(AIscendTheme.Colors.textPrimary)
-
-            Text("Open your profile, settings, and upcoming AIscend labs from one cleaner launch surface.")
-                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-        }
-    }
-
-    private var moreHubSpotlight: some View {
-        AIscendEditorialHeroCard(
-            eyebrow: "Workspace",
-            title: displayName,
-            subtitle: subtitle,
-            accent: .sky
-        ) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                HStack(spacing: AIscendTheme.Spacing.mediumLarge) {
-                    ProfileAvatarView(
-                        localURL: model.profileAvatarURL,
-                        remoteURL: session.user?.photoURL,
-                        initials: initials
-                    )
-
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                        Text(session.providerSummary)
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
-
-                        Text(model.profile.intention)
-                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-                            .lineLimit(3)
-                    }
-                }
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        AIscendStatChip(
-                            title: "Mode",
-                            value: model.profile.focusTrack.title,
-                            symbol: model.profile.focusTrack.symbol,
-                            accent: .sky
-                        )
-                        AIscendStatChip(
-                            title: "Wake",
-                            value: model.profile.wakeLabel,
-                            symbol: "alarm.fill",
-                            accent: .dawn
-                        )
-                        AIscendStatChip(
-                            title: "Anchors",
-                            value: "\(max(model.profile.anchors.count, 1))",
-                            symbol: "sparkles.rectangle.stack",
-                            accent: .mint
-                        )
-                    }
-
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        AIscendStatChip(
-                            title: "Mode",
-                            value: model.profile.focusTrack.title,
-                            symbol: model.profile.focusTrack.symbol,
-                            accent: .sky
-                        )
-                        AIscendStatChip(
-                            title: "Wake",
-                            value: model.profile.wakeLabel,
-                            symbol: "alarm.fill",
-                            accent: .dawn
-                        )
-                        AIscendStatChip(
-                            title: "Anchors",
-                            value: "\(max(model.profile.anchors.count, 1))",
-                            symbol: "sparkles.rectangle.stack",
-                            accent: .mint
-                        )
-                    }
-                }
             }
         }
     }
+}
 
-    private var moreHubDestinations: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            AIscendSectionHeader(
-                eyebrow: "Destinations",
-                title: "Open a dedicated page",
-                subtitle: "Each area now lives on its own screen so the More tab feels cleaner and easier to navigate."
-            )
+private enum MoreHubTab: String, CaseIterable, Identifiable {
+    case profile = "Profile"
+    case lookalike = "Lookalike"
+    case skinLab = "Skin Lab"
 
-            VStack(spacing: AIscendTheme.Spacing.small) {
-                ForEach(MoreHubSection.allCases) { section in
-                    NavigationLink(value: section) {
-                        MoreHubDestinationCard(section: section)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
+    var id: String { rawValue }
+
+    static var placeholderTabs: [MoreHubTab] {
+        [.lookalike, .skinLab]
     }
 
-    private var moreHubPulse: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            AIscendSectionHeader(
-                eyebrow: "Today",
-                title: "Keep the account side moving",
-                subtitle: "Quick maintenance lives here without turning the root More page into a full settings form."
-            )
-
-            profileSignalStrip
-
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                Button {
-                    showingDailyCheckIn = true
-                } label: {
-                    AIscendButtonLabel(
-                        title: dailyCheckInStore.hasCheckedInToday ? "Review Check-In" : "Complete Check-In",
-                        leadingSymbol: "calendar.badge.checkmark"
-                    )
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .primary))
-
-                Button {
-                    showingStreaks = true
-                } label: {
-                    AIscendButtonLabel(title: "Open Streaks", leadingSymbol: "flame.fill")
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .secondary))
-            }
-
-            if let errorMessage = session.errorMessage {
-                profileMessageCard(title: "Auth status", message: errorMessage)
-            } else if let configurationMessage = session.configurationMessage {
-                profileMessageCard(title: "Firebase setup", message: configurationMessage)
-            }
+    var symbol: String {
+        switch self {
+        case .profile:
+            "person.crop.circle.fill"
+        case .lookalike:
+            "person.2.fill"
+        case .skinLab:
+            "sparkles"
         }
     }
+}
 
-    private var profileSignalStrip: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                ProfileSignalCard(
-                    title: "Streak",
-                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
-                    detail: dailyCheckInStore.hasCheckedInToday ? "Protected" : "Open",
-                    accent: .dawn
-                )
+private enum MoreHubDestination: Hashable {
+    case profile
+}
 
-                ProfileSignalCard(
-                    title: "Badges",
-                    value: "\(badgeManager.earnedCount)",
-                    detail: badgeManager.earnedBadges.first?.title ?? "Quiet progress",
-                    accent: .mint
-                )
+private struct MoreHubTabChip: View {
+    let tab: MoreHubTab
+    let isSelected: Bool
 
-                ProfileSignalCard(
-                    title: "Reminders",
-                    value: "\(notificationManager.preferences.enabledCount)",
-                    detail: notificationManager.authorizationState.badgeTitle,
-                    accent: .sky
-                )
-            }
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: tab.symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(isSelected ? AIscendTheme.Colors.textPrimary : AIscendTheme.Colors.textSecondary)
 
-            VStack(spacing: AIscendTheme.Spacing.small) {
-                ProfileSignalCard(
-                    title: "Streak",
-                    value: "\(dailyCheckInStore.snapshot.currentStreak)d",
-                    detail: dailyCheckInStore.hasCheckedInToday ? "Protected" : "Open",
-                    accent: .dawn
+            Text(tab.rawValue)
+                .aiscendTextStyle(
+                    .caption,
+                    color: isSelected ? AIscendTheme.Colors.textPrimary : AIscendTheme.Colors.textSecondary
                 )
-
-                ProfileSignalCard(
-                    title: "Badges",
-                    value: "\(badgeManager.earnedCount)",
-                    detail: badgeManager.earnedBadges.first?.title ?? "Quiet progress",
-                    accent: .mint
-                )
-
-                ProfileSignalCard(
-                    title: "Reminders",
-                    value: "\(notificationManager.preferences.enabledCount)",
-                    detail: notificationManager.authorizationState.badgeTitle,
-                    accent: .sky
-                )
-            }
+                .lineLimit(1)
         }
-    }
-
-    private var profileActionsCard: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            Text("Quick actions")
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
-
-            VStack(spacing: 0) {
-                ProfileActionRow(
-                    title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
-                    detail: "Close today's loop and protect the streak.",
-                    symbol: "calendar.badge.checkmark",
-                    accent: .sky,
-                    action: { showingDailyCheckIn = true }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(
+                    isSelected
+                    ? AIscendTheme.Colors.surfaceHighlight.opacity(0.96)
+                    : AIscendTheme.Colors.surfaceMuted.opacity(0.82)
                 )
-
-                ProfileActionDivider()
-
-                ProfileActionRow(
-                    title: "Open Streaks",
-                    detail: "See consistency, badges, and momentum.",
-                    symbol: "flame.fill",
-                    accent: .dawn,
-                    action: { showingStreaks = true }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(
+                    isSelected
+                    ? AIscendTheme.Colors.accentGlow.opacity(0.34)
+                    : AIscendTheme.Colors.borderSubtle,
+                    lineWidth: 1
                 )
-
-                ProfileActionDivider()
-
-                ProfileActionRow(
-                    title: "Refine onboarding",
-                    detail: "Adjust your routine setup and goals.",
-                    symbol: "slider.horizontal.3",
-                    accent: .mint,
-                    action: { model.resetOnboarding() }
-                )
-
-                ProfileActionDivider()
-
-                ProfileActionRow(
-                    title: "Reset today's progress",
-                    detail: "Clear the daily routine completion state.",
-                    symbol: "arrow.counterclockwise",
-                    accent: .sky,
-                    action: { model.resetRoutineProgress() }
-                )
-
-                ProfileActionDivider()
-
-                ProfileActionRow(
-                    title: "Sign out",
-                    detail: "Disconnect the current session.",
-                    symbol: "rectangle.portrait.and.arrow.right",
-                    accent: .dawn,
-                    destructive: true,
-                    action: { session.signOut() }
-                )
-            }
-            .background(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
-                    .fill(AIscendTheme.Colors.surfaceMuted.opacity(0.94))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
-                    .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-            )
-        }
-    }
-
-    private func profileMessageCard(title: String, message: String) -> some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            AIscendBadge(title: title, symbol: "info.circle.fill", style: .neutral)
-
-            Text(message)
-                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-        }
-        .padding(AIscendTheme.Spacing.large)
-        .aiscendPanel(.muted)
+        )
     }
 }
 
@@ -1515,6 +1669,7 @@ struct RoutineBlueprintView: View {
 }
 
 struct AccountView: View {
+    @Environment(\.dismiss) private var dismiss
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
@@ -1539,6 +1694,7 @@ struct AccountView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
+                    topBar
                     userPanel
                     profileSnapshotPanel
                     routineStatePanel
@@ -1597,6 +1753,20 @@ struct AccountView: View {
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var topBar: some View {
+        HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+            AIscendTopBarButton(symbol: "chevron.left", action: { dismiss() })
+
+            AIscendBadge(
+                title: "Profile",
+                symbol: "person.crop.circle.fill",
+                style: .neutral
+            )
+
+            Spacer(minLength: 0)
         }
     }
 
@@ -2105,16 +2275,17 @@ struct AccountView: View {
     }
 }
 
-private struct ProfileAvatarView: View {
+struct ProfileAvatarView: View {
     let localURL: URL?
     let remoteURL: URL?
     let initials: String
+    var size: CGFloat = 88
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(AIscendTheme.Colors.accentPrimary.opacity(0.18))
-                .frame(width: 88, height: 88)
+                .frame(width: size, height: size)
                 .overlay(
                     Circle()
                         .stroke(AIscendTheme.Colors.accentGlow.opacity(0.34), lineWidth: AIscendTheme.Stroke.thin)
@@ -2125,7 +2296,7 @@ private struct ProfileAvatarView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: 88, height: 88)
+                    .frame(width: size, height: size)
                     .clipShape(Circle())
             } else if let remoteURL {
                 AsyncImage(url: remoteURL) { phase in
@@ -2135,17 +2306,22 @@ private struct ProfileAvatarView: View {
                             .resizable()
                             .scaledToFill()
                     default:
-                        Text(initials.isEmpty ? "AI" : initials)
-                            .aiscendTextStyle(.metricCompact)
+                        fallbackInitials
                     }
                 }
-                .frame(width: 88, height: 88)
+                .frame(width: size, height: size)
                 .clipShape(Circle())
             } else {
-                Text(initials.isEmpty ? "AI" : initials)
-                    .aiscendTextStyle(.metricCompact)
+                fallbackInitials
             }
         }
+        .frame(width: size, height: size)
+    }
+
+    private var fallbackInitials: some View {
+        Text(initials.isEmpty ? "AI" : initials)
+            .font(.system(size: max(13, size * 0.3), weight: .bold, design: .rounded))
+            .foregroundStyle(AIscendTheme.Colors.textPrimary)
     }
 }
 

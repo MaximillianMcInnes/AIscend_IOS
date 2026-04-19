@@ -626,52 +626,38 @@ struct AIscendMetricCard: View {
         .aiscendPanel(highlighted ? .hero : .standard)
     }
 }
-
 struct AIscendLoadingIndicator: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false
 
+    var size: CGFloat = 28
+    var lineWidth: CGFloat = 2.5
+
     var body: some View {
         ZStack {
             Circle()
-                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 10)
+                .stroke(
+                    AIscendTheme.Colors.borderSubtle.opacity(0.55),
+                    lineWidth: lineWidth
+                )
 
             Circle()
-                .trim(from: 0.08, to: 0.72)
+                .trim(from: 0.08, to: 0.34)
                 .stroke(
-                    LinearGradient(
-                        colors: [
-                            AIscendTheme.Colors.accentGlow,
-                            AIscendTheme.Colors.accentPrimary
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                    AIscendTheme.Colors.textPrimary,
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                 )
                 .rotationEffect(.degrees(isAnimating ? 360 : 0))
-
-            Circle()
-                .fill(AIscendTheme.Colors.accentGlow)
-                .frame(width: 10, height: 10)
-                .offset(y: -31)
-                .blur(radius: 0.3)
-                .opacity(0.92)
         }
-        .frame(width: 76, height: 76)
-        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.24), radius: 22, x: 0, y: 0)
+        .frame(width: size, height: size)
         .onAppear {
-            guard !reduceMotion else {
-                return
-            }
-
-            withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 0.85).repeatForever(autoreverses: false)) {
                 isAnimating = true
             }
         }
     }
 }
-
 private struct AIscendInputModifier: ViewModifier {
     let isFocused: Bool
 

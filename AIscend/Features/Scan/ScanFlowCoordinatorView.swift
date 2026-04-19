@@ -75,10 +75,10 @@ struct ScanFlowCoordinatorView: View {
         case .front:
             ScanCapturePageView(
                 title: "Front Photo",
-                subtitle: "Upload a clean front-facing photo.",
+                subtitle: "Take a clean front-facing photo or choose one from your library.",
                 image: frontImage,
                 symbol: "person.crop.square",
-                buttonTitle: frontImage == nil ? "Upload Front Photo" : "Replace Front Photo",
+                buttonTitle: frontImage == nil ? "Choose Front Photo" : "Choose Different Front Photo",
                 stepTitle: "Step 1 of 3",
                 onBack: nil,
                 onClose: onDismiss,
@@ -92,10 +92,10 @@ struct ScanFlowCoordinatorView: View {
         case .side:
             ScanCapturePageView(
                 title: "Side Photo",
-                subtitle: "Upload a clear side profile with the same lighting.",
+                subtitle: "Take a clear side profile or choose one with the same lighting from your library.",
                 image: sideImage,
                 symbol: "person.crop.rectangle",
-                buttonTitle: sideImage == nil ? "Upload Side Photo" : "Replace Side Photo",
+                buttonTitle: sideImage == nil ? "Choose Side Photo" : "Choose Different Side Photo",
                 stepTitle: "Step 2 of 3",
                 onBack: {
                     step = .front

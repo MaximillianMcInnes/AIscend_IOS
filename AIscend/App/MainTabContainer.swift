@@ -54,7 +54,8 @@ struct MainTabContainer: View {
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
 
-    @State private var selectedTab: MainTabDestination = .home
+    @State private var selectedTab: MainTabDestination = Self.resolveInitialSelectedTab()
+    @State private var homePath: [HomeDestination] = []
     @State private var showingDailyPhotoCapture = false
     @State private var showingDailyPhotoArchive = false
     @State private var showingDailyCheckIn = false
@@ -72,30 +73,7 @@ struct MainTabContainer: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                homeTab
-                    .opacity(selectedTab == .home ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .home)
-                    .zIndex(selectedTab == .home ? 1 : 0)
-
-                routineTab
-                    .opacity(selectedTab == .routine ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .routine)
-                    .zIndex(selectedTab == .routine ? 1 : 0)
-
-                scanTab
-                    .opacity(selectedTab == .scan ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .scan)
-                    .zIndex(selectedTab == .scan ? 1 : 0)
-
-                chatTab
-                    .opacity(selectedTab == .chat ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .chat)
-                    .zIndex(selectedTab == .chat ? 1 : 0)
-
-                moreTab
-                    .opacity(selectedTab == .more ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .more)
-                    .zIndex(selectedTab == .more ? 1 : 0)
+                selectedTabContent
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.clear)
@@ -234,10 +212,27 @@ struct MainTabContainer: View {
         .preferredColorScheme(.dark)
     }
 
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        switch selectedTab {
+        case .home:
+            homeTab
+        case .routine:
+            routineTab
+        case .scan:
+            scanTab
+        case .chat:
+            chatTab
+        case .more:
+            moreTab
+        }
+    }
+
     private var homeTab: some View {
-        NavigationStack {
+        NavigationStack(path: $homePath) {
             RoutineDashboardView(
                 model: model,
+                session: session,
                 dailyCheckInStore: dailyCheckInStore,
                 dailyPhotoStore: dailyPhotoStore,
                 badgeManager: badgeManager,
@@ -248,9 +243,21 @@ struct MainTabContainer: View {
                 onOpenDailyPhoto: { showingDailyPhotoArchive = true },
                 onCaptureDailyPhoto: { showingDailyPhotoCapture = true },
                 onOpenScan: { select(.scan) },
-                onOpenAccount: { select(.more) },
+                onOpenAccount: openHomeProfile,
                 onRefine: { model.resetOnboarding() }
             )
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .profile:
+                    AccountView(
+                        model: model,
+                        session: session,
+                        dailyCheckInStore: dailyCheckInStore,
+                        badgeManager: badgeManager,
+                        notificationManager: notificationManager
+                    )
+                }
+            }
             .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -273,6 +280,10 @@ struct MainTabContainer: View {
         NavigationStack {
             AIscendScanStudioView(
                 model: model,
+                session: session,
+                badgeManager: badgeManager,
+                dailyCheckInStore: dailyCheckInStore,
+                notificationManager: notificationManager,
                 onOpenLatestResult: { showingScanResults = true },
                 onBeginCapture: { showingScanCapture = true },
                 onOpenChat: { select(.chat) },
@@ -319,6 +330,10 @@ struct MainTabContainer: View {
     }
 
     private func maybePresentDailyPhotoPrompt(_ trigger: DailyPhotoPromptTrigger) {
+        guard !Self.shouldDisableDailyPhotoPromptsForUITests() else {
+            return
+        }
+
         guard !isPresentingBlockingModal else {
             return
         }
@@ -335,6 +350,10 @@ struct MainTabContainer: View {
             return
         }
 
+        if selectedTab == .home && tab != .home {
+            homePath.removeAll()
+        }
+
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
 
         let shouldQuickFade = tabDistance(from: selectedTab, to: tab) > 2
@@ -343,6 +362,37 @@ struct MainTabContainer: View {
         withAnimation(shouldQuickFade ? .easeOut(duration: 0.18) : .spring(response: 0.34, dampingFraction: 0.86)) {
             selectedTab = tab
         }
+    }
+
+    private func openHomeProfile() {
+        guard homePath.last != .profile else {
+            return
+        }
+
+        homePath.append(.profile)
+    }
+}
+
+private extension MainTabContainer {
+    static func resolveInitialSelectedTab(
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> MainTabDestination {
+        guard let configuredTab = arguments.first(where: { $0.hasPrefix("--uitest-start-tab=") }) else {
+            return .home
+        }
+
+        let rawValue = String(configuredTab.dropFirst("--uitest-start-tab=".count))
+        return MainTabDestination(rawValue: rawValue) ?? .home
+    }
+
+    static func shouldDisableDailyPhotoPromptsForUITests(
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> Bool {
+        arguments.contains("--uitest-disable-daily-photo-prompts")
+    }
+
+    enum HomeDestination: Hashable {
+        case profile
     }
 }
 

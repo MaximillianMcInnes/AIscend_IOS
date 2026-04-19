@@ -5,6 +5,7 @@
 //  Created by Codex on 4/12/26.
 //
 
+import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -495,6 +496,8 @@ private extension String {
 }
 
 struct ScanCaptureFlowView: View {
+    @Environment(\.openURL) private var openURL
+
     let session: AuthSessionStore
     let onOpenRoutine: () -> Void
     let onOpenChat: () -> Void
@@ -509,12 +512,14 @@ struct ScanCaptureFlowView: View {
     @State private var phase: Phase = .frontCapture
     @State private var frontPickerItem: PhotosPickerItem?
     @State private var sidePickerItem: PhotosPickerItem?
+    @State private var activeCameraAngle: CaptureAngle?
     @State private var frontPreview: UIImage?
     @State private var sidePreview: UIImage?
     @State private var frontData: Data?
     @State private var sideData: Data?
     @State private var progress: Double = 0
     @State private var importMessage: String?
+    @State private var cameraAlert: ScanCameraAlert?
     @State private var isImportingFront = false
     @State private var isImportingSide = false
     @State private var processingTask: Task<Void, Never>?
@@ -550,6 +555,41 @@ struct ScanCaptureFlowView: View {
             content
         }
         .preferredColorScheme(.dark)
+        .fullScreenCover(item: $activeCameraAngle) { angle in
+            AIscendEditedCameraPicker(
+                onImagePicked: { image in
+                    activeCameraAngle = nil
+
+                    Task {
+                        await importCapturedPhoto(image, sideProfile: angle == .side)
+                    }
+                },
+                onCancel: {
+                    activeCameraAngle = nil
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .alert(item: $cameraAlert) { alert in
+            switch alert {
+            case .unavailable:
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    dismissButton: .default(Text("OK"))
+                )
+
+            case .denied:
+                return Alert(
+                    title: Text(alert.title),
+                    message: Text(alert.message),
+                    primaryButton: .default(Text("Settings")) {
+                        openAppSettings()
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+        }
         .onChange(of: frontPickerItem) { _, newValue in
             guard let newValue else {
                 return
@@ -750,13 +790,28 @@ struct ScanCaptureFlowView: View {
                     .disabled(isImporting)
                 }
 
+                if canUseCamera {
+                    Button(action: { startCameraCapture(for: angle) }) {
+                        AIscendButtonLabel(
+                            title: angle.cameraButtonTitle(review: review),
+                            leadingSymbol: review ? "camera.rotate.fill" : "camera.fill"
+                        )
+                    }
+                    .buttonStyle(AIscendButtonStyle(variant: review ? .secondary : .primary))
+                    .disabled(isImporting)
+                }
+
                 PhotosPicker(selection: pickerBinding(for: angle), matching: .images) {
                     AIscendButtonLabel(
-                        title: review ? angle.replaceButtonTitle : angle.buttonTitle(previewExists: preview(for: angle) != nil),
-                        leadingSymbol: review ? "arrow.triangle.2.circlepath" : "photo.badge.plus"
+                        title: angle.libraryButtonTitle(review: review),
+                        leadingSymbol: review ? "photo" : "photo.badge.plus"
                     )
                 }
-                .buttonStyle(AIscendButtonStyle(variant: review ? .secondary : .primary))
+                .buttonStyle(
+                    AIscendButtonStyle(
+                        variant: (review || canUseCamera) ? .secondary : .primary
+                    )
+                )
                 .disabled(isImporting)
 
                 if review {
@@ -801,6 +856,10 @@ struct ScanCaptureFlowView: View {
 
     private var isPremiumUnlocked: Bool {
         badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked })
+    }
+
+    private var canUseCamera: Bool {
+        UIImagePickerController.isSourceTypeAvailable(.camera)
     }
 
     private var isImporting: Bool {
@@ -866,6 +925,40 @@ struct ScanCaptureFlowView: View {
         }
     }
 
+    private func startCameraCapture(for angle: CaptureAngle) {
+        guard canUseCamera else {
+            cameraAlert = .unavailable
+            return
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            activeCameraAngle = angle
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        activeCameraAngle = angle
+                    } else {
+                        cameraAlert = .denied
+                    }
+                }
+            }
+        case .denied, .restricted:
+            cameraAlert = .denied
+        @unknown default:
+            cameraAlert = .unavailable
+        }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            return
+        }
+
+        openURL(url)
+    }
+
     private func scanMetric(title: String, value: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
             Text(title)
@@ -918,21 +1011,7 @@ struct ScanCaptureFlowView: View {
             }
 
             await MainActor.run {
-                if sideProfile {
-                    sidePreview = image
-                    sideData = compressed
-                    phase = .sideReview
-                } else {
-                    frontPreview = image
-                    frontData = compressed
-                    phase = .frontReview
-                }
-
-                setImporting(false, sideProfile: sideProfile)
-
-                importMessage = sideProfile
-                    ? "Side profile loaded. Confirm it or replace it before AIScend submits the scan."
-                    : "Front capture loaded. Confirm it or replace it before moving to the side view."
+                stageImportedPhoto(image, data: compressed, sideProfile: sideProfile)
             }
         } catch {
             await MainActor.run {
@@ -940,6 +1019,38 @@ struct ScanCaptureFlowView: View {
                 setImporting(false, sideProfile: sideProfile)
             }
         }
+    }
+
+    @MainActor
+    private func importCapturedPhoto(_ image: UIImage, sideProfile: Bool) async {
+        setImporting(true, sideProfile: sideProfile)
+        importMessage = nil
+
+        guard let compressed = image.jpegData(compressionQuality: 0.88) else {
+            importMessage = "That photo format is not supported."
+            setImporting(false, sideProfile: sideProfile)
+            return
+        }
+
+        stageImportedPhoto(image, data: compressed, sideProfile: sideProfile)
+    }
+
+    @MainActor
+    private func stageImportedPhoto(_ image: UIImage, data: Data, sideProfile: Bool) {
+        if sideProfile {
+            sidePreview = image
+            sideData = data
+            phase = .sideReview
+        } else {
+            frontPreview = image
+            frontData = data
+            phase = .frontReview
+        }
+
+        setImporting(false, sideProfile: sideProfile)
+        importMessage = sideProfile
+            ? "Side photo ready. Confirm it or replace it before AIScend submits the scan."
+            : "Front photo ready. Confirm it or replace it before moving to the side view."
     }
 
     private func setImporting(_ importing: Bool, sideProfile: Bool) {
@@ -1103,9 +1214,18 @@ private extension ScanCaptureFlowView {
 }
 
 private extension ScanCaptureFlowView {
-    enum CaptureAngle {
+    enum CaptureAngle: Identifiable {
         case front
         case side
+
+        var id: String {
+            switch self {
+            case .front:
+                "front"
+            case .side:
+                "side"
+            }
+        }
 
         var symbol: String {
             switch self {
@@ -1150,11 +1270,11 @@ private extension ScanCaptureFlowView {
         func stepTitle(review: Bool) -> String {
             switch (self, review) {
             case (.front, false):
-                "Upload your front photo"
+                "Add your front photo"
             case (.front, true):
                 "Confirm the front capture"
             case (.side, false):
-                "Upload your side profile"
+                "Add your side profile"
             case (.side, true):
                 "Confirm the side photo and submit"
             }
@@ -1163,11 +1283,11 @@ private extension ScanCaptureFlowView {
         func stepSubtitle(review: Bool) -> String {
             switch (self, review) {
             case (.front, false):
-                "Start with the straight-on angle. Once it looks clean, you can lock it in or replace it."
+                "Start with the straight-on angle. Take one in the app or choose from your library, then lock it in or replace it."
             case (.front, true):
                 "Check framing, posture, and lighting before moving on to the side profile."
             case (.side, false):
-                "Match the same lighting, keep the jaw relaxed, and line up a clean profile."
+                "Match the same lighting, keep the jaw relaxed, and line up a clean profile from the camera or your library."
             case (.side, true):
                 "The second confirmation is the last stop before both photos are pushed to the API."
             }
@@ -1176,18 +1296,35 @@ private extension ScanCaptureFlowView {
         func buttonTitle(previewExists: Bool) -> String {
             switch self {
             case .front:
-                previewExists ? "Replace front photo" : "Upload front photo"
+                previewExists ? "Replace front photo" : "Take or choose front photo"
             case .side:
-                previewExists ? "Replace side photo" : "Upload side photo"
+                previewExists ? "Replace side photo" : "Take or choose side photo"
             }
         }
 
-        var replaceButtonTitle: String {
-            switch self {
-            case .front:
-                "Replace front photo"
-            case .side:
-                "Replace side photo"
+        func cameraButtonTitle(review: Bool) -> String {
+            switch (self, review) {
+            case (.front, false):
+                "Take front photo"
+            case (.front, true):
+                "Retake front photo"
+            case (.side, false):
+                "Take side photo"
+            case (.side, true):
+                "Retake side photo"
+            }
+        }
+
+        func libraryButtonTitle(review: Bool) -> String {
+            switch (self, review) {
+            case (.front, false):
+                "Choose front photo"
+            case (.front, true):
+                "Choose different front photo"
+            case (.side, false):
+                "Choose side photo"
+            case (.side, true):
+                "Choose different side photo"
             }
         }
 
@@ -1211,7 +1348,32 @@ private extension ScanCaptureFlowView {
     }
 }
 
-private enum ScanCaptureAssetStore {
+private enum ScanCameraAlert: Int, Identifiable {
+    case unavailable
+    case denied
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .unavailable:
+            "Camera Unavailable"
+        case .denied:
+            "Camera Access Needed"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .unavailable:
+            "This device does not have a camera available for in-app scan capture."
+        case .denied:
+            "Allow camera access in Settings to capture and crop scan photos without leaving the app."
+        }
+    }
+}
+
+enum ScanCaptureAssetStore {
     static func store(data: Data, prefix: String) throws -> URL {
         let root = try captureDirectory()
         let fileURL = root.appendingPathComponent("\(prefix)-\(UUID().uuidString).jpg")
@@ -1380,7 +1542,7 @@ private struct ScanImportCard<CTA: View>: View {
                             Text(buttonTitle)
                                 .aiscendTextStyle(.cardTitle)
 
-                            Text("Import a clean image from your library to populate this angle.")
+                            Text("Take a clean photo in the app or choose one from your library to populate this angle.")
                                 .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                                 .multilineTextAlignment(.center)
                                 .frame(maxWidth: 280)
@@ -1562,7 +1724,7 @@ private struct SwipeToStartControl: View {
     }
 }
 
-private struct ScanProcessingExperience: View {
+struct ScanProcessingExperience: View {
     let progress: Double
     let onCancel: () -> Void
 

@@ -8,9 +8,11 @@
 import Foundation
 import Charts
 import SwiftUI
+import UIKit
 
 struct RoutineDashboardView: View {
     @Bindable var model: AppModel
+    let session: AuthSessionStore
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
     @ObservedObject var dailyPhotoStore: DailyPhotoStore
     @ObservedObject var badgeManager: BadgeManager
@@ -39,7 +41,9 @@ struct RoutineDashboardView: View {
     }
 
     private var firstName: String {
-        let trimmed = model.profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourceName = (session.user?.displayName ?? model.profile.displayName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = sourceName
         guard !trimmed.isEmpty else {
             return "Climber"
         }
@@ -48,6 +52,10 @@ struct RoutineDashboardView: View {
     }
 
     private var avatarInitials: String {
+        if let sessionInitials = session.user?.initials, !sessionInitials.isEmpty {
+            return sessionInitials
+        }
+
         let parts = model.profile.displayName
             .split(separator: " ")
             .map(String.init)
@@ -58,6 +66,14 @@ struct RoutineDashboardView: View {
 
         let fallback = String(model.profile.displayName.prefix(2)).uppercased()
         return fallback.isEmpty ? "AI" : fallback
+    }
+
+    private var avatarRemoteURL: URL? {
+        session.user?.photoURL
+    }
+
+    private var avatarLocalURL: URL? {
+        model.profileAvatarURL
     }
 
     private var scanCountLabel: String {
@@ -163,6 +179,40 @@ struct RoutineDashboardView: View {
         min(max(Double(liveStreakDays) / 14, 0.08), 1)
     }
 
+    private var featuredDailyPhotoEntry: DailyPhotoEntry? {
+        dailyPhotoStore.todayEntry ?? dailyPhotoStore.recentEntries(limit: 1).first
+    }
+
+    private var dailyPhotoArchiveLabel: String {
+        dailyPhotoStore.captureCount == 1 ? "1 day saved" : "\(dailyPhotoStore.captureCount) days saved"
+    }
+
+    private var dailyPhotoStatusLabel: String {
+        dailyPhotoStore.hasPhotoToday ? "Captured" : "Open"
+    }
+
+    private var dailyPhotoHeadline: String {
+        dailyPhotoStore.hasPhotoToday ? "Today's photo is already in." : "Today's photo is still waiting."
+    }
+
+    private var dailyPhotoDetail: String {
+        if dailyPhotoStore.hasPhotoToday {
+            return dailyPhotoStore.captureCount > 1
+                ? "Retake it if you want a sharper frame, or open the archive to compare the run."
+                : "Your first frame is saved. Keep the ritual moving or open the archive to review it."
+        }
+
+        return "Use the in-app camera to snap a clean frame now, then let the archive build itself day by day."
+    }
+
+    private var dailyPhotoPrimaryActionTitle: String {
+        dailyPhotoStore.hasPhotoToday ? "Retake Today's Photo" : "Take Today's Photo"
+    }
+
+    private var dailyPhotoSecondaryActionTitle: String {
+        dailyPhotoStore.captureCount > 0 ? "Open Daily Photos" : "View Archive"
+    }
+
     private var reportAmbientLayer: some View {
         ZStack {
             Circle()
@@ -215,7 +265,17 @@ struct RoutineDashboardView: View {
 
             HStack(spacing: AIscendTheme.Spacing.small) {
                 AIscendTopBarButton(symbol: "camera.aperture", highlighted: true, action: onOpenScan)
-                AIscendTopBarButton(symbol: "ellipsis", action: onOpenAccount)
+
+                Button(action: onOpenAccount) {
+                    ProfileAvatarView(
+                        localURL: avatarLocalURL,
+                        remoteURL: avatarRemoteURL,
+                        initials: avatarInitials,
+                        size: 44
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open account")
             }
         }
     }
@@ -463,20 +523,19 @@ struct RoutineDashboardView: View {
                 HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
                         AIscendBadge(
-                            title: dailyPhotoStore.captureCount > 0 ? "Daily Photos" : "Daily Photo Widget",
+                            title: dailyPhotoStore.hasPhotoToday ? "Today's photo captured" : "Today's photo open",
                             symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.seal.fill" : "camera.aperture",
                             style: .accent
                         )
 
-                        Text("Daily photos")
+                        Text("Today's photo")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
-                        Text(
-                            dailyPhotoStore.captureCount > 0
-                                ? "Open your photo timeline, switch between newest and oldest, and review the archive from one focused page."
-                                : "Start your photo timeline here. Save one frame and this becomes your visual archive for daily progress."
-                        )
+                        Text(dailyPhotoHeadline)
+                            .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
+
+                        Text(dailyPhotoDetail)
                         .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                     }
 
@@ -486,63 +545,93 @@ struct RoutineDashboardView: View {
                 }
 
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        DailyPhotosWidgetMetaPill(
-                            title: "Saved",
-                            value: dailyPhotoStore.captureCount == 1 ? "1 day" : "\(dailyPhotoStore.captureCount) days"
+                    HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                        DailyPhotosWidgetPreviewCard(
+                            store: dailyPhotoStore,
+                            entry: featuredDailyPhotoEntry,
+                            isTodayCaptured: dailyPhotoStore.hasPhotoToday
                         )
-                        DailyPhotosWidgetMetaPill(
-                            title: "Current run",
-                            value: "\(dailyPhotoStore.currentStreakDays())d"
-                        )
-                        DailyPhotosWidgetMetaPill(
-                            title: "Sort",
-                            value: "Newest or oldest"
-                        )
+
+                        VStack(spacing: AIscendTheme.Spacing.small) {
+                            DailyPhotosWidgetMetaPill(
+                                title: "Archive",
+                                value: dailyPhotoArchiveLabel,
+                                symbol: "photo.stack.fill"
+                            )
+                            DailyPhotosWidgetMetaPill(
+                                title: "Run",
+                                value: "\(dailyPhotoStore.currentStreakDays())d",
+                                symbol: "sparkles.rectangle.stack.fill"
+                            )
+                            DailyPhotosWidgetMetaPill(
+                                title: "Status",
+                                value: dailyPhotoStatusLabel,
+                                symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.circle.fill" : "sun.max.fill"
+                            )
+                        }
+                        .frame(width: 220)
                     }
 
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        DailyPhotosWidgetMetaPill(
-                            title: "Saved",
-                            value: dailyPhotoStore.captureCount == 1 ? "1 day" : "\(dailyPhotoStore.captureCount) days"
+                        DailyPhotosWidgetPreviewCard(
+                            store: dailyPhotoStore,
+                            entry: featuredDailyPhotoEntry,
+                            isTodayCaptured: dailyPhotoStore.hasPhotoToday
                         )
-                        DailyPhotosWidgetMetaPill(
-                            title: "Current run",
-                            value: "\(dailyPhotoStore.currentStreakDays())d"
-                        )
-                        DailyPhotosWidgetMetaPill(
-                            title: "Sort",
-                            value: "Newest or oldest"
-                        )
+
+                        HStack(spacing: AIscendTheme.Spacing.small) {
+                            DailyPhotosWidgetMetaPill(
+                                title: "Archive",
+                                value: dailyPhotoArchiveLabel,
+                                symbol: "photo.stack.fill"
+                            )
+                            DailyPhotosWidgetMetaPill(
+                                title: "Run",
+                                value: "\(dailyPhotoStore.currentStreakDays())d",
+                                symbol: "sparkles.rectangle.stack.fill"
+                            )
+                            DailyPhotosWidgetMetaPill(
+                                title: "Status",
+                                value: dailyPhotoStatusLabel,
+                                symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.circle.fill" : "sun.max.fill"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
                     }
                 }
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onOpenDailyPhoto) {
-                            AIscendButtonLabel(title: "Open Daily Photos", leadingSymbol: "square.grid.2x2.fill")
+                        Button(action: onCaptureDailyPhoto) {
+                            AIscendButtonLabel(
+                                title: dailyPhotoPrimaryActionTitle,
+                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                            )
                         }
                         .buttonStyle(AIscendButtonStyle(variant: .primary))
 
-                        Button(action: onCaptureDailyPhoto) {
+                        Button(action: onOpenDailyPhoto) {
                             AIscendButtonLabel(
-                                title: dailyPhotoStore.hasPhotoToday ? "Update Today's Photo" : "Take Today's Photo",
-                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                                title: dailyPhotoSecondaryActionTitle,
+                                leadingSymbol: "square.grid.2x2.fill"
                             )
                         }
                         .buttonStyle(AIscendButtonStyle(variant: .secondary))
                     }
 
                     VStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onOpenDailyPhoto) {
-                            AIscendButtonLabel(title: "Open Daily Photos", leadingSymbol: "square.grid.2x2.fill")
+                        Button(action: onCaptureDailyPhoto) {
+                            AIscendButtonLabel(
+                                title: dailyPhotoPrimaryActionTitle,
+                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                            )
                         }
                         .buttonStyle(AIscendButtonStyle(variant: .primary))
 
-                        Button(action: onCaptureDailyPhoto) {
+                        Button(action: onOpenDailyPhoto) {
                             AIscendButtonLabel(
-                                title: dailyPhotoStore.hasPhotoToday ? "Update Today's Photo" : "Take Today's Photo",
-                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                                title: dailyPhotoSecondaryActionTitle,
+                                leadingSymbol: "square.grid.2x2.fill"
                             )
                         }
                         .buttonStyle(AIscendButtonStyle(variant: .secondary))
@@ -769,25 +858,152 @@ struct RoutineDashboardView: View {
 private struct DailyPhotosWidgetMetaPill: View {
     let title: String
     let value: String
+    let symbol: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            ZStack {
+                Circle()
+                    .fill(AIscendTheme.Colors.surfaceInteractive.opacity(0.86))
+                    .frame(width: 34, height: 34)
 
-            Text(value)
-                .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
-                .lineLimit(1)
+                Image(systemName: symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Text(value)
+                    .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, AIscendTheme.Spacing.medium)
-        .padding(.vertical, AIscendTheme.Spacing.small)
+        .padding(.vertical, AIscendTheme.Spacing.medium)
         .background(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
         )
         .overlay(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct DailyPhotosWidgetPreviewCard: View {
+    @ObservedObject var store: DailyPhotoStore
+    let entry: DailyPhotoEntry?
+    let isTodayCaptured: Bool
+
+    private var surfaceShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: 26, style: .continuous)
+    }
+
+    private var previewLabel: String {
+        if isTodayCaptured {
+            return "Saved today"
+        }
+
+        return entry == nil ? "Camera ready" : "Latest saved"
+    }
+
+    private var title: String {
+        guard let entry else {
+            return "Take one clean frame"
+        }
+
+        if isTodayCaptured {
+            return entry.createdAt.formatted(date: .omitted, time: .shortened)
+        }
+
+        if let date = DailyPhotoStore.date(from: entry.ymd) {
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+
+        return entry.ymd
+    }
+
+    private var detail: String {
+        if isTodayCaptured {
+            return "Your photo is saved locally and ready for the archive."
+        }
+
+        if entry != nil {
+            return "Your latest frame stays here until you capture today's."
+        }
+
+        return "Open the in-app camera and save one photo to start the timeline."
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            surfaceShape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.surfaceHighlight.opacity(0.96),
+                            AIscendTheme.Colors.surfaceMuted.opacity(0.98)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if let entry,
+               let url = store.imageURL(for: entry),
+               let image = UIImage(contentsOfFile: url.path)
+            {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+            } else {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 54)
+
+                    Text("No photo yet")
+                        .aiscendTextStyle(.cardTitle)
+
+                    Text("The first capture turns this panel into your daily visual check-in.")
+                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                }
+                .padding(AIscendTheme.Spacing.large)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+
+            LinearGradient(
+                colors: [
+                    Color.clear,
+                    AIscendTheme.Colors.overlayDark.opacity(0.88)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                Text(previewLabel.uppercased())
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+                Text(title)
+                    .aiscendTextStyle(.sectionTitle)
+
+                Text(detail)
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                    .lineLimit(3)
+            }
+            .padding(AIscendTheme.Spacing.large)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 208)
+        .clipShape(surfaceShape)
+        .overlay(
+            surfaceShape
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
@@ -2470,6 +2686,7 @@ private func dashboardSignedMetric(_ value: Double) -> String {
             model.toggleStep("deep-work")
             return model
         }(),
+        session: AuthSessionStore(),
         dailyCheckInStore: DailyCheckInStore(),
         dailyPhotoStore: DailyPhotoStore(),
         badgeManager: BadgeManager()

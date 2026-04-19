@@ -347,11 +347,11 @@ struct DailyPhotoCaptureSheet: View {
     }
 
     private var cameraButtonTitle: String {
-        "Take a Photo"
+        store.hasPhotoToday ? "Retake Photo" : "Take Photo"
     }
 
     private var libraryButtonTitle: String {
-        "Select Photo"
+        store.hasPhotoToday ? "Choose Different Photo" : "Choose Photo"
     }
 
     var body: some View {
@@ -386,7 +386,7 @@ struct DailyPhotoCaptureSheet: View {
             matching: .images
         )
         .fullScreenCover(isPresented: $showingCameraCapture) {
-            DailyPhotoCameraPicker(
+            AIscendEditedCameraPicker(
                 onImagePicked: { image in
                     showingCameraCapture = false
 
@@ -444,7 +444,7 @@ struct DailyPhotoCaptureSheet: View {
             Text(
                 store.hasPhotoToday
                 ? "Today's photo is saved. You can leave it or replace it with a new one."
-                : "Take a quick photo for today, or choose one from your library."
+                : "Snap today's photo in the app, or choose one from your library."
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)
@@ -471,7 +471,7 @@ struct DailyPhotoCaptureSheet: View {
                 Text(
                     store.hasPhotoToday
                     ? "Retake it if you want a better shot."
-                    : "You can use the camera or pick one from Photos."
+                    : "Use the in-app camera or pick one from Photos."
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -505,46 +505,66 @@ struct DailyPhotoCaptureSheet: View {
             }
 
             if canUseCamera {
-                Button(action: startCameraCapture) {
-                    Label(cameraButtonTitle, systemImage: "camera.fill")
-                        .frame(maxWidth: .infinity)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        cameraActionButton
+                        libraryActionButton
+                    }
+
+                    VStack(spacing: AIscendTheme.Spacing.small) {
+                        cameraActionButton
+                        libraryActionButton
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .tint(AIscendTheme.Colors.accentSoft)
-                .disabled(isSaving)
+            } else {
+                libraryActionButton
             }
 
+            if store.hasPhotoToday {
+                Button("Done", action: onDismiss)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, AIscendTheme.Spacing.xxSmall)
+                    .disabled(isSaving)
+            }
+        }
+        .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
+        .padding(.top, AIscendTheme.Spacing.small)
+        .padding(.bottom, AIscendTheme.Spacing.medium)
+        .background(.bar)
+    }
+
+    private var cameraActionButton: some View {
+        Button(action: startCameraCapture) {
+            Label(cameraButtonTitle, systemImage: "camera.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .tint(AIscendTheme.Colors.accentSoft)
+        .disabled(isSaving)
+    }
+
+    private var libraryActionButton: some View {
+        Group {
             if canUseCamera {
                 Button(action: openPhotoLibrary) {
                     Label(libraryButtonTitle, systemImage: "photo.on.rectangle.angled")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isSaving)
             } else {
                 Button(action: openPhotoLibrary) {
                     Label(libraryButtonTitle, systemImage: "photo.on.rectangle.angled")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.large)
                 .tint(AIscendTheme.Colors.accentSoft)
-                .disabled(isSaving)
             }
-
-            Button(store.hasPhotoToday ? "Done" : "Later", action: onDismiss)
-                .font(.body.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.top, AIscendTheme.Spacing.xxSmall)
-                .disabled(isSaving)
         }
-        .padding(.horizontal, AIscendTheme.Spacing.mediumLarge)
-        .padding(.top, AIscendTheme.Spacing.small)
-        .padding(.bottom, AIscendTheme.Spacing.medium)
-        .background(.bar)
+        .controlSize(.large)
+        .disabled(isSaving)
     }
 
     private func feedbackBanner(_ message: String) -> some View {
@@ -796,7 +816,8 @@ private struct DailyPhotoSheetCard<Content: View>: View {
     }
 }
 
-private struct DailyPhotoCameraPicker: UIViewControllerRepresentable {
+struct AIscendEditedCameraPicker: UIViewControllerRepresentable {
+    var preferredCameraDevice: UIImagePickerController.CameraDevice = .front
     let onImagePicked: (UIImage) -> Void
     let onCancel: () -> Void
 
@@ -809,11 +830,11 @@ private struct DailyPhotoCameraPicker: UIViewControllerRepresentable {
         picker.sourceType = .camera
         picker.cameraCaptureMode = .photo
         picker.modalPresentationStyle = .fullScreen
-        picker.allowsEditing = false
+        picker.allowsEditing = true
         picker.delegate = context.coordinator
 
-        if UIImagePickerController.isCameraDeviceAvailable(.front) {
-            picker.cameraDevice = .front
+        if UIImagePickerController.isCameraDeviceAvailable(preferredCameraDevice) {
+            picker.cameraDevice = preferredCameraDevice
         }
 
         return picker
@@ -841,7 +862,7 @@ private struct DailyPhotoCameraPicker: UIViewControllerRepresentable {
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            if let image = info[.originalImage] as? UIImage {
+            if let image = (info[.editedImage] ?? info[.originalImage]) as? UIImage {
                 onImagePicked(image)
             } else {
                 onCancel()
