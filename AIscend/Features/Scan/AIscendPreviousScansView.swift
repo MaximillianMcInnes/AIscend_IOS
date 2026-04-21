@@ -15,20 +15,26 @@ import FirebaseFirestore
 
 struct AIscendPreviousScansView: View {
     let session: AuthSessionStore
+    var embedded: Bool = false
     var onOpenScanRecord: (PersistedScanRecord) -> Void = { _ in }
     var onStartNewScan: () -> Void = {}
 
     @StateObject private var viewModel: ScanArchiveViewModel
     @State private var sortMode: ScanArchiveSortMode = .newest
+    @State private var visibleItemLimit = Self.pageSize
+
+    private static let pageSize = 5
 
     init(
         session: AuthSessionStore,
+        embedded: Bool = false,
         previewItems: [ScanArchiveItem]? = nil,
         repository: ScanResultsRepositoryProtocol = ScanResultsRepository(),
         onOpenScanRecord: @escaping (PersistedScanRecord) -> Void = { _ in },
         onStartNewScan: @escaping () -> Void = {}
     ) {
         self.session = session
+        self.embedded = embedded
         self.onOpenScanRecord = onOpenScanRecord
         self.onStartNewScan = onStartNewScan
         _viewModel = StateObject(
@@ -41,6 +47,10 @@ struct AIscendPreviousScansView: View {
 
     private var sortedItems: [ScanArchiveItem] {
         sortMode.sorted(viewModel.items)
+    }
+
+    private var visibleItems: [ScanArchiveItem] {
+        Array(sortedItems.prefix(visibleItemLimit))
     }
 
     private var bestScanID: String? {
@@ -65,28 +75,48 @@ struct AIscendPreviousScansView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                archiveHero
-
-                if let errorMessage = viewModel.errorMessage {
-                    archiveError(message: errorMessage)
+        Group {
+            if embedded {
+                archiveBody
+            } else {
+                ScrollView(showsIndicators: false) {
+                    archiveBody
+                        .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                        .padding(.top, AIscendTheme.Spacing.large)
+                        .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
                 }
-
-                sortControl
-
-                archiveContent
             }
-            .padding(.bottom, AIscendTheme.Spacing.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("previous-scans-root")
         .task(id: session.user?.id) {
             await viewModel.loadArchive(for: session.user)
+            resetVisibleItems()
         }
         .refreshable {
             await viewModel.loadArchive(for: session.user, force: true)
+            resetVisibleItems()
+        }
+        .onChange(of: sortMode) { _, _ in
+            resetVisibleItems()
+        }
+        .onChange(of: viewModel.items.count) { _, _ in
+            resetVisibleItems()
+        }
+    }
+
+    private var archiveBody: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            archiveHero
+
+            if let errorMessage = viewModel.errorMessage {
+                archiveError(message: errorMessage)
+            }
+
+            sortControl
+
+            archiveContent
         }
     }
 
@@ -124,6 +154,21 @@ struct AIscendPreviousScansView: View {
                             : "\(latestScore)"
                     )
                 }
+
+                HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+                    Text("Your archive now keeps the best result, latest result, and both saved photo angles easier to scan at a glance.")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                }
+                .padding(.horizontal, AIscendTheme.Spacing.medium)
+                .padding(.vertical, AIscendTheme.Spacing.small)
+                .background(
+                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                        .fill(Color.white.opacity(0.06))
+                )
             }
             .overlay(alignment: .topTrailing) {
                 Circle()
@@ -138,8 +183,18 @@ struct AIscendPreviousScansView: View {
 
     private var sortControl: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            Text("Sort")
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+            HStack(alignment: .firstTextBaseline, spacing: AIscendTheme.Spacing.small) {
+                Text("Sort")
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Spacer(minLength: 0)
+
+                if !viewModel.items.isEmpty {
+                    Text("Showing \(visibleItems.count) of \(viewModel.items.count)")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+                        .monospacedDigit()
+                }
+            }
 
             HStack(spacing: 6) {
                 ForEach(ScanArchiveSortMode.allCases) { mode in
@@ -195,7 +250,7 @@ struct AIscendPreviousScansView: View {
             ScanArchiveEmptyState(onStartNewScan: onStartNewScan)
         } else {
             LazyVStack(spacing: AIscendTheme.Spacing.medium) {
-                ForEach(sortedItems) { item in
+                ForEach(visibleItems) { item in
                     ScanArchiveCard(
                         item: item,
                         isBest: item.id == bestScanID,
@@ -204,9 +259,26 @@ struct AIscendPreviousScansView: View {
                             onOpenScanRecord(item.record)
                         }
                     )
+                    .onAppear {
+                        loadMoreIfNeeded(currentItem: item)
+                    }
                 }
             }
         }
+    }
+
+    private func resetVisibleItems() {
+        visibleItemLimit = min(Self.pageSize, sortedItems.count)
+    }
+
+    private func loadMoreIfNeeded(currentItem: ScanArchiveItem) {
+        guard currentItem.id == visibleItems.last?.id,
+              visibleItemLimit < sortedItems.count
+        else {
+            return
+        }
+
+        visibleItemLimit = min(visibleItemLimit + Self.pageSize, sortedItems.count)
     }
 
     private func archiveStat(title: String, value: String) -> some View {
@@ -932,6 +1004,18 @@ private struct ScanArchiveCard: View {
         return AIscendTheme.Colors.borderSubtle
     }
 
+    private var cardFill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white.opacity(isBest ? 0.16 : 0.11),
+                AIscendTheme.Colors.surfaceHighlight.opacity(isLatest ? 0.80 : 0.68),
+                accentColor.opacity(0.08)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
             HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
@@ -945,32 +1029,26 @@ private struct ScanArchiveCard: View {
 
                 Spacer()
 
-                HStack(spacing: 8) {
-                    ScanArchiveTag(title: item.accessLabel, tint: accentColor.opacity(0.18), foreground: accentColor)
-
-                    if isBest {
-                        ScanArchiveTag(
-                            title: "Best Score",
-                            symbol: "trophy.fill",
-                            tint: Color(red: 0.72, green: 0.58, blue: 0.22).opacity(0.22),
-                            foreground: Color(red: 0.96, green: 0.83, blue: 0.46)
-                        )
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        archiveTags
                     }
 
-                    if isLatest {
-                        ScanArchiveTag(
-                            title: "Latest Scan",
-                            symbol: "clock.fill",
-                            tint: AIscendTheme.Colors.accentGlow.opacity(0.18),
-                            foreground: AIscendTheme.Colors.accentGlow
-                        )
+                    VStack(alignment: .trailing, spacing: 8) {
+                        archiveTags
                     }
                 }
             }
 
             HStack(spacing: AIscendTheme.Spacing.small) {
-                ScanArchivePhotoCard(title: "Front", url: url(from: item.record.meta.frontUrl))
-                ScanArchivePhotoCard(title: "Side", url: url(from: item.record.meta.sideUrl))
+                scoreSnapshot(title: "Score", value: "\(Int(score.rounded()))")
+                scoreSnapshot(title: "Tier", value: item.record.tierTitle)
+                scoreSnapshot(title: "Top", value: "\(item.record.percentile)%")
+            }
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                ScanArchivePhotoCard(title: "Front", rawValue: item.record.meta.frontUrl)
+                ScanArchivePhotoCard(title: "Side", rawValue: item.record.meta.sideUrl)
             }
 
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
@@ -1012,56 +1090,22 @@ private struct ScanArchiveCard: View {
                     .lineLimit(2)
             }
 
-            HStack(spacing: 10) {
-                ShareLink(item: item.shareText) {
-                    ScanArchiveActionButton(
-                        title: "Share",
-                        symbol: "square.and.arrow.up",
-                        fill: AIscendTheme.Colors.accentCyan.opacity(0.20),
-                        stroke: AIscendTheme.Colors.accentCyan.opacity(0.34)
-                    )
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    shareButton
+                    challengeButton
                 }
-                .buttonStyle(.plain)
 
-                Button {
-                    UIPasteboard.general.string = item.challengeText
-                    UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        didCopyChallenge = true
-                    }
-
-                    Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 1_400_000_000)
-                        withAnimation(.easeOut(duration: 0.2)) {
-                            didCopyChallenge = false
-                        }
-                    }
-                } label: {
-                    ScanArchiveActionButton(
-                        title: didCopyChallenge ? "Copied" : "Challenge a Friend",
-                        symbol: didCopyChallenge ? "checkmark" : "bolt.fill",
-                        fill: AIscendTheme.Colors.success.opacity(0.18),
-                        stroke: AIscendTheme.Colors.success.opacity(0.28)
-                    )
+                VStack(spacing: 10) {
+                    shareButton
+                    challengeButton
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(AIscendTheme.Spacing.mediumLarge)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.10),
-                            AIscendTheme.Colors.surfaceHighlight.opacity(0.68),
-                            Color.white.opacity(0.04)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(cardFill)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -1072,36 +1116,129 @@ private struct ScanArchiveCard: View {
         .onTapGesture(perform: onOpen)
     }
 
-    private func url(from rawValue: String?) -> URL? {
-        guard let rawValue = rawValue?.trimmedNonEmpty else {
-            return nil
+    private func scoreSnapshot(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle.opacity(0.85), lineWidth: 1)
+        )
+    }
+
+    @ViewBuilder
+    private var archiveTags: some View {
+        ScanArchiveTag(title: item.accessLabel, tint: accentColor.opacity(0.18), foreground: accentColor)
+
+        if isBest {
+            ScanArchiveTag(
+                title: "Best Score",
+                symbol: "trophy.fill",
+                tint: Color(red: 0.72, green: 0.58, blue: 0.22).opacity(0.22),
+                foreground: Color(red: 0.96, green: 0.83, blue: 0.46)
+            )
         }
 
-        if rawValue.hasPrefix("http://") || rawValue.hasPrefix("https://") || rawValue.hasPrefix("file://") {
-            return URL(string: rawValue)
+        if isLatest {
+            ScanArchiveTag(
+                title: "Latest Scan",
+                symbol: "clock.fill",
+                tint: AIscendTheme.Colors.accentGlow.opacity(0.18),
+                foreground: AIscendTheme.Colors.accentGlow
+            )
         }
+    }
 
-        if rawValue.hasPrefix("/") {
-            return URL(fileURLWithPath: rawValue)
+    private var shareButton: some View {
+        ShareLink(item: item.shareText) {
+            ScanArchiveActionButton(
+                title: "Share",
+                symbol: "square.and.arrow.up",
+                fill: AIscendTheme.Colors.accentCyan.opacity(0.20),
+                stroke: AIscendTheme.Colors.accentCyan.opacity(0.34)
+            )
         }
+        .buttonStyle(.plain)
+    }
 
-        return URL(string: rawValue)
+    private var challengeButton: some View {
+        Button {
+            UIPasteboard.general.string = item.challengeText
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+
+            withAnimation(.easeOut(duration: 0.2)) {
+                didCopyChallenge = true
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_400_000_000)
+                withAnimation(.easeOut(duration: 0.2)) {
+                    didCopyChallenge = false
+                }
+            }
+        } label: {
+            ScanArchiveActionButton(
+                title: didCopyChallenge ? "Copied" : "Challenge a Friend",
+                symbol: didCopyChallenge ? "checkmark" : "bolt.fill",
+                fill: AIscendTheme.Colors.success.opacity(0.18),
+                stroke: AIscendTheme.Colors.success.opacity(0.28)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 
 private struct ScanArchivePhotoCard: View {
     let title: String
-    let url: URL?
+    let rawValue: String?
 
     @State private var didRevealImage = false
+
+    private var resolvedSource: ScanArchiveImageSource {
+        ScanArchiveImageSource(rawValue: rawValue)
+    }
+
+    private var remoteURL: URL? {
+        resolvedSource.remoteURL
+    }
+
+    private var localImage: UIImage? {
+        resolvedSource.localURL.flatMap { url in
+            UIImage(contentsOfFile: url.path)
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(Color(hex: "11161D"))
 
-            if let url {
-                AsyncImage(url: url) { phase in
+            if let image = localImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .opacity(didRevealImage ? 1 : 0)
+                    .scaleEffect(didRevealImage ? 1 : 1.03)
+                    .blur(radius: didRevealImage ? 0 : 10)
+                    .onAppear {
+                        revealImageIfNeeded()
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            } else if let remoteURL {
+                AsyncImage(url: remoteURL) { phase in
                     switch phase {
                     case .success(let image):
                         image
@@ -1111,9 +1248,7 @@ private struct ScanArchivePhotoCard: View {
                             .scaleEffect(didRevealImage ? 1 : 1.03)
                             .blur(radius: didRevealImage ? 0 : 10)
                             .onAppear {
-                                withAnimation(.easeOut(duration: 0.45)) {
-                                    didRevealImage = true
-                                }
+                                revealImageIfNeeded()
                             }
                     case .empty:
                         photoPlaceholder
@@ -1147,6 +1282,9 @@ private struct ScanArchivePhotoCard: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
+        .onChange(of: rawValue) { _, _ in
+            didRevealImage = false
+        }
     }
 
     private var photoPlaceholder: some View {
@@ -1164,6 +1302,99 @@ private struct ScanArchivePhotoCard: View {
                 .foregroundStyle(AIscendTheme.Colors.textMuted)
         )
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func revealImageIfNeeded() {
+        guard !didRevealImage else {
+            return
+        }
+
+        withAnimation(.easeOut(duration: 0.45)) {
+            didRevealImage = true
+        }
+    }
+}
+
+private struct ScanArchiveImageSource {
+    let localURL: URL?
+    let remoteURL: URL?
+
+    init(rawValue: String?) {
+        let trimmed = rawValue?.trimmedNonEmpty
+        localURL = Self.resolveLocalURL(from: trimmed)
+        remoteURL = Self.resolveRemoteURL(from: trimmed)
+    }
+
+    private static func resolveLocalURL(from rawValue: String?) -> URL? {
+        guard let rawValue else {
+            return nil
+        }
+
+        let candidates = candidateLocalURLs(for: rawValue)
+        return candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) })
+    }
+
+    private static func candidateLocalURLs(for rawValue: String) -> [URL] {
+        var candidates: [URL] = []
+
+        if rawValue.hasPrefix("/") {
+            candidates.append(URL(fileURLWithPath: rawValue))
+        }
+
+        if let directURL = URL(string: rawValue), directURL.isFileURL {
+            candidates.append(directURL)
+        }
+
+        if let decodedValue = rawValue.removingPercentEncoding {
+            if decodedValue.hasPrefix("/") {
+                candidates.append(URL(fileURLWithPath: decodedValue))
+            }
+
+            if let decodedURL = URL(string: decodedValue), decodedURL.isFileURL {
+                candidates.append(decodedURL)
+            }
+        }
+
+        if !rawValue.contains("://"), !rawValue.hasPrefix("/") {
+            let relativeCandidates: [URL] = [
+                FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
+                FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
+                FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
+                FileManager.default.temporaryDirectory
+            ].compactMap { $0 }
+
+            for directory in relativeCandidates {
+                candidates.append(directory.appendingPathComponent(rawValue))
+                candidates.append(directory.appendingPathComponent("ScanCaptures", isDirectory: true).appendingPathComponent(rawValue))
+            }
+        }
+
+        return candidates
+    }
+
+    private static func resolveRemoteURL(from rawValue: String?) -> URL? {
+        guard let rawValue else {
+            return nil
+        }
+
+        let candidates = [
+            rawValue,
+            rawValue.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            rawValue.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
+        ]
+
+        for candidate in candidates.compactMap({ $0 }) {
+            guard let url = URL(string: candidate),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https"
+            else {
+                continue
+            }
+
+            return url
+        }
+
+        return nil
     }
 }
 

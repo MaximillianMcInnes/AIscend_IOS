@@ -24,6 +24,7 @@ final class AIscendChatViewModel {
     var errorMessage: String?
     var transientNotice: String?
     var scrollTrigger: Int = 0
+    var composerFocusRequestToken: Int = 0
 
     private(set) var isDraftConversation: Bool = true
     private(set) var activeThreadID: String?
@@ -181,6 +182,17 @@ final class AIscendChatViewModel {
         errorMessage = nil
         isHistoryPresented = false
         scrollTrigger += 1
+    }
+
+    func preparePrefilledDraft(_ prompt: String) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            return
+        }
+
+        startNewConversation()
+        draft = trimmedPrompt
+        composerFocusRequestToken += 1
     }
 
     func presentHistory() {

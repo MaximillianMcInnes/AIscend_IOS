@@ -705,51 +705,54 @@ private struct DashboardConsistencyStrip: View {
     let onOpenConsistency: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+                Image(systemName: checkedInToday ? "checkmark.seal.fill" : "flame.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(checkedInToday ? AIscendTheme.Colors.success : AIscendTheme.Colors.accentGlow)
+
+                Text("\(streakDays)-day daily streak")
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                    .padding(.horizontal, AIscendTheme.Spacing.small)
+                    .padding(.vertical, AIscendTheme.Spacing.xSmall)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.78))
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                    )
+
+                Spacer(minLength: 0)
+            }
+
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
                 Text(checkedInToday ? "Today's signal is protected" : "Today's check-in is still open")
                     .aiscendTextStyle(.cardTitle)
 
                 Text(checkedInToday ? "The chain is clean. Reopen it only if you want to refine the reflection." : "Close the day with a fast check-in before attention drifts.")
                     .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-
-                Text("\(streakDays)-day live streak")
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
             }
 
-            Spacer(minLength: 0)
-
-            VStack(spacing: AIscendTheme.Spacing.small) {
-                DashboardCompactActionButton(
-                    title: checkedInToday ? "Review" : "Check In",
+            HStack(spacing: AIscendTheme.Spacing.mediumLarge) {
+                DashboardInlineActionLink(
+                    title: checkedInToday ? "Review check-in" : "Complete check-in",
                     symbol: "calendar.badge.checkmark",
                     action: onOpenCheckIn
                 )
 
-                DashboardCompactActionButton(
-                    title: "Streaks",
+                DashboardInlineActionLink(
+                    title: "Open streaks",
                     symbol: "flame.fill",
                     action: onOpenConsistency
                 )
             }
         }
-        .padding(AIscendTheme.Spacing.medium)
-        .background(
-            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
-                .overlay(
-                    RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                        .fill(Color.white.opacity(0.03))
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
-                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-        )
     }
 }
 
-private struct DashboardCompactActionButton: View {
+private struct DashboardInlineActionLink: View {
     let title: String
     let symbol: String
     let action: () -> Void
@@ -758,23 +761,19 @@ private struct DashboardCompactActionButton: View {
         Button(action: action) {
             HStack(spacing: AIscendTheme.Spacing.xSmall) {
                 Image(systemName: symbol)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
 
                 Text(title)
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.textMuted)
             }
-            .padding(.horizontal, AIscendTheme.Spacing.small)
-            .padding(.vertical, AIscendTheme.Spacing.xSmall)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(AIscendTheme.Colors.surfaceInteractive.opacity(0.92))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .foregroundStyle(AIscendTheme.Colors.accentGlow)
     }
 }
 

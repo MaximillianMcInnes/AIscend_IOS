@@ -626,6 +626,7 @@ struct AIscendMetricCard: View {
         .aiscendPanel(highlighted ? .hero : .standard)
     }
 }
+
 struct AIscendLoadingIndicator: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isAnimating = false

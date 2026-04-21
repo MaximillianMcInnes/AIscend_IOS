@@ -32,15 +32,14 @@ private enum RoutineWorkspaceTab: String, CaseIterable, Identifiable {
         case .plan:
             "Plan"
         case .trackers:
-            "Trackers"
+            "Hydration"
         }
     }
 }
 
 private enum RoutineTrackerTab: String, CaseIterable, Identifiable {
     case water
-    case calories
-    case exercise
+    case electrolytes
 
     var id: String { rawValue }
 
@@ -48,10 +47,8 @@ private enum RoutineTrackerTab: String, CaseIterable, Identifiable {
         switch self {
         case .water:
             "Water"
-        case .calories:
-            "Calories"
-        case .exercise:
-            "Exercise"
+        case .electrolytes:
+            "Electrolytes"
         }
     }
 }
@@ -59,13 +56,49 @@ private enum RoutineTrackerTab: String, CaseIterable, Identifiable {
 struct RoutineCleanSlateView: View {
     @Bindable var model: AppModel
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
+    @ObservedObject var hydrationStore: HydrationTrackingStore
+    @ObservedObject var electrolyteStore: ElectrolyteTrackingStore
     @ObservedObject var badgeManager: BadgeManager
     let onOpenCheckIn: () -> Void
     let onOpenConsistency: () -> Void
+    let onOpenHydrationChat: (String) -> Void
     let onRefine: () -> Void
 
     @State private var selectedTab: RoutineWorkspaceTab = .daily
     @State private var selectedTrackerTab: RoutineTrackerTab = .water
+
+    private var baseWaterSummary: WaterDailySummary {
+        hydrationStore.todaySummary()
+    }
+
+    private var hydrationElectrolyteSummary: ElectrolyteDailySummary {
+        electrolyteStore.todaySummary(waterIntakeMl: baseWaterSummary.totalWaterMl)
+    }
+
+    private var hydrationWaterSummary: WaterDailySummary {
+        hydrationStore.todaySummary(electrolyteSummary: hydrationElectrolyteSummary)
+    }
+
+    private var hydrationCompletionCount: Int {
+        [
+            hydrationWaterSummary.hydrationState == .optimal || hydrationWaterSummary.hydrationState == .high,
+            hydrationElectrolyteSummary.balanceState == .balanced
+        ]
+        .filter { $0 }
+        .count
+    }
+
+    private var hydrationHeroTitle: String {
+        if hydrationWaterSummary.totalWaterMl == 0 {
+            return "Hydration ready"
+        }
+
+        return "\(HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true)) logged"
+    }
+
+    private var hydrationHeroDetail: String {
+        hydrationStore.combinedInsight(electrolyteSummary: hydrationElectrolyteSummary)
+    }
 
     var body: some View {
         ZStack {
@@ -94,13 +127,40 @@ struct RoutineCleanSlateView: View {
                 style: .accent
             )
 
-            Text("Routine")
-                .font(.system(size: 40, weight: .bold, design: .rounded))
-                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+                    routineTitle
+                    routineStreakButton
+                }
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    routineTitle
+                    routineStreakButton
+                }
+            }
 
             Text("A calmer routine surface with one tab for execution, one for planning, and one for health tracking.")
                 .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
         }
+    }
+
+    private var routineTitle: some View {
+        Text("Routine")
+            .font(.system(size: 40, weight: .bold, design: .rounded))
+            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.82)
+    }
+
+    private var routineStreakButton: some View {
+        Button(action: onOpenConsistency) {
+            RoutineStreakBadge(
+                streakDays: dailyCheckInStore.snapshot.currentStreak,
+                checkedInToday: dailyCheckInStore.hasCheckedInToday
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open daily streak")
     }
 
     private var routineTabBar: some View {
@@ -190,7 +250,7 @@ struct RoutineCleanSlateView: View {
         case .plan:
             "Your operating plan"
         case .trackers:
-            "Daily tracking"
+            "Hydration"
         }
     }
 
@@ -201,7 +261,7 @@ struct RoutineCleanSlateView: View {
         case .plan:
             model.profile.focusTrack.title
         case .trackers:
-            "\(model.trackerCompletionCount)/3 trackers live"
+            hydrationHeroTitle
         }
     }
 
@@ -212,7 +272,7 @@ struct RoutineCleanSlateView: View {
         case .plan:
             model.profile.intention
         case .trackers:
-            "Keep water, calories, and exercise visible so the basics stay easy to log on busy days."
+            hydrationHeroDetail
         }
     }
 
@@ -371,70 +431,41 @@ struct RoutineCleanSlateView: View {
                 HStack(spacing: AIscendTheme.Spacing.small) {
                     RoutineSlateMetric(
                         title: "Water",
-                        value: "\(model.trackerState.waterIntake)",
-                        detail: "of \(model.trackerState.waterGoal) cups",
+                        value: HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true),
+                        detail: "Target \(HydrationTrackingEngine.formatWater(hydrationWaterSummary.targetWaterMl, prefersCompact: true))",
                         accent: .mint
                     )
 
                     RoutineSlateMetric(
-                        title: "Calories",
-                        value: "\(model.trackerState.caloriesLogged)",
-                        detail: "of \(model.trackerState.calorieGoal) kcal",
+                        title: "Balance",
+                        value: hydrationElectrolyteSummary.balanceState.title,
+                        detail: "\(hydrationCompletionCount)/2 signals aligned",
                         accent: .dawn
-                    )
-
-                    RoutineSlateMetric(
-                        title: "Exercise",
-                        value: "\(model.trackerState.exerciseMinutes)m",
-                        detail: "of \(model.trackerState.exerciseGoalMinutes)m goal",
-                        accent: .sky
                     )
                 }
 
                 VStack(spacing: AIscendTheme.Spacing.small) {
                     RoutineSlateMetric(
                         title: "Water",
-                        value: "\(model.trackerState.waterIntake)",
-                        detail: "of \(model.trackerState.waterGoal) cups",
+                        value: HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true),
+                        detail: "Target \(HydrationTrackingEngine.formatWater(hydrationWaterSummary.targetWaterMl, prefersCompact: true))",
                         accent: .mint
                     )
 
                     RoutineSlateMetric(
-                        title: "Calories",
-                        value: "\(model.trackerState.caloriesLogged)",
-                        detail: "of \(model.trackerState.calorieGoal) kcal",
+                        title: "Balance",
+                        value: hydrationElectrolyteSummary.balanceState.title,
+                        detail: "\(hydrationCompletionCount)/2 signals aligned",
                         accent: .dawn
-                    )
-
-                    RoutineSlateMetric(
-                        title: "Exercise",
-                        value: "\(model.trackerState.exerciseMinutes)m",
-                        detail: "of \(model.trackerState.exerciseGoalMinutes)m goal",
-                        accent: .sky
                     )
                 }
             }
 
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                AIscendSectionHeader(
-                    eyebrow: "Trackers",
-                    title: "Log the basics",
-                    subtitle: "Switch between water, calories, and exercise without leaving the routine page."
-                )
-
-                RoutineTrackerToggle(selection: $selectedTrackerTab)
-            }
-            .padding(AIscendTheme.Spacing.large)
-            .aiscendPanel(.standard)
-
-            switch selectedTrackerTab {
-            case .water:
-                waterTrackerCard
-            case .calories:
-                calorieTrackerCard
-            case .exercise:
-                exerciseTrackerCard
-            }
+            HydrationTrackingView(
+                store: hydrationStore,
+                electrolyteStore: electrolyteStore,
+                onOpenChat: onOpenHydrationChat
+            )
         }
     }
 
@@ -449,7 +480,7 @@ struct RoutineCleanSlateView: View {
             stats: [
                 RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.waterIntake) cups", symbol: "drop.fill", accent: .mint),
                 RoutineTrackerStat(title: "Target", value: "\(model.trackerState.waterGoal) cups", symbol: "target", accent: .sky),
-                RoutineTrackerStat(title: "Status", value: model.trackerState.waterIntake >= model.trackerState.waterGoal ? "Goal hit" : "In progress", symbol: "sparkles", accent: .dawn)
+                RoutineTrackerStat(title: "Streak", value: "\(model.habitStreak(for: "water")) days", symbol: "flame.fill", accent: .dawn)
             ],
             actions: [
                 RoutineTrackerAction(
@@ -470,33 +501,33 @@ struct RoutineCleanSlateView: View {
         )
     }
 
-    private var calorieTrackerCard: some View {
+    private var electrolyteTrackerCard: some View {
         RoutineTrackerDetailCard(
-            eyebrow: "Calories",
-            title: "\(model.trackerState.caloriesLogged) kcal logged",
-            subtitle: "Keep food intake easy to update so your plan has an anchor instead of a guess.",
+            eyebrow: "Electrolytes",
+            title: "\(model.trackerState.electrolyteIntake) of \(model.trackerState.electrolyteGoal) servings",
+            subtitle: "Track your electrolyte intake so hydration quality stays visible, not just total water.",
             accent: .dawn,
-            progress: trackerProgress(model.trackerState.caloriesLogged, goal: model.trackerState.calorieGoal),
-            progressLabel: calorieProgressLabel,
+            progress: trackerProgress(model.trackerState.electrolyteIntake, goal: model.trackerState.electrolyteGoal),
+            progressLabel: "\(max(model.trackerState.electrolyteGoal - model.trackerState.electrolyteIntake, 0)) servings remaining",
             stats: [
-                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.caloriesLogged) kcal", symbol: "fork.knife", accent: .dawn),
-                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.calorieGoal) kcal", symbol: "target", accent: .sky),
-                RoutineTrackerStat(title: "Status", value: calorieStatusLabel, symbol: "flame.fill", accent: .mint)
+                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.electrolyteIntake) servings", symbol: "bolt.heart.fill", accent: .dawn),
+                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.electrolyteGoal) servings", symbol: "target", accent: .sky),
+                RoutineTrackerStat(title: "Streak", value: "\(model.habitStreak(for: "electrolytes")) days", symbol: "flame.fill", accent: .mint)
             ],
             actions: [
                 RoutineTrackerAction(
-                    id: "calories-minus",
-                    title: "Remove 100 Kcal",
+                    id: "electrolytes-minus",
+                    title: "Remove 1 Serving",
                     symbol: "minus",
                     variant: .secondary,
-                    action: { model.adjustCalories(by: -100) }
+                    action: { model.adjustElectrolyteIntake(by: -1) }
                 ),
                 RoutineTrackerAction(
-                    id: "calories-plus",
-                    title: "Add 100 Kcal",
+                    id: "electrolytes-plus",
+                    title: "Add 1 Serving",
                     symbol: "plus",
                     variant: .primary,
-                    action: { model.adjustCalories(by: 100) }
+                    action: { model.adjustElectrolyteIntake(by: 1) }
                 )
             ]
         )
@@ -1297,6 +1328,34 @@ private struct RoutineSlateMetric: View {
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                 .stroke(accent.tint.opacity(0.18), lineWidth: 1)
+        )
+    }
+}
+
+private struct RoutineStreakBadge: View {
+    let streakDays: Int
+    let checkedInToday: Bool
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+            Image(systemName: checkedInToday ? "flame.fill" : "flame")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.accentAmber)
+
+            Text("\(streakDays)")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+        }
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 8)
+        .background(
+            Capsule(style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.88))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AIscendTheme.Colors.accentAmber.opacity(0.28), lineWidth: 1)
         )
     }
 }

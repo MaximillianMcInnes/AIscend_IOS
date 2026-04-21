@@ -263,10 +263,48 @@ struct RoutineProfile: Codable, Equatable {
 struct RoutineTrackerState: Codable, Equatable {
     var waterIntake: Int = 0
     var waterGoal: Int = 8
+    var electrolyteIntake: Int = 0
+    var electrolyteGoal: Int = 1
     var caloriesLogged: Int = 0
     var calorieGoal: Int = 2200
     var exerciseMinutes: Int = 0
     var exerciseGoalMinutes: Int = 45
+
+    private enum CodingKeys: String, CodingKey {
+        case waterIntake
+        case waterGoal
+        case electrolyteIntake
+        case electrolyteGoal
+        case caloriesLogged
+        case calorieGoal
+        case exerciseMinutes
+        case exerciseGoalMinutes
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        waterIntake = try container.decodeIfPresent(Int.self, forKey: .waterIntake) ?? 0
+        waterGoal = try container.decodeIfPresent(Int.self, forKey: .waterGoal) ?? 8
+        electrolyteIntake = try container.decodeIfPresent(Int.self, forKey: .electrolyteIntake) ?? 0
+        electrolyteGoal = try container.decodeIfPresent(Int.self, forKey: .electrolyteGoal) ?? 1
+        caloriesLogged = try container.decodeIfPresent(Int.self, forKey: .caloriesLogged) ?? 0
+        calorieGoal = try container.decodeIfPresent(Int.self, forKey: .calorieGoal) ?? 2200
+        exerciseMinutes = try container.decodeIfPresent(Int.self, forKey: .exerciseMinutes) ?? 0
+        exerciseGoalMinutes = try container.decodeIfPresent(Int.self, forKey: .exerciseGoalMinutes) ?? 45
+    }
+}
+
+struct HabitStreakSummary: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let detail: String
+    let symbol: String
+    let accent: RoutineAccent
+    let currentStreak: Int
+    let isCompletedToday: Bool
+    let progressLabel: String?
 }
 
 struct RoutineStep: Identifiable, Hashable {
@@ -295,6 +333,8 @@ final class AppModel {
         static let completedStepIDs = "completedStepIDs"
         static let routineXP = "routineXP"
         static let trackerState = "trackerState"
+        static let habitHistory = "habitHistory"
+        static let lastRoutineDay = "lastRoutineDay"
     }
 
     private enum GlobalKeys {
@@ -305,6 +345,24 @@ final class AppModel {
     private let defaults: UserDefaults
     private var storageNamespace: String
     private var isRestoringPersistedState = false
+    private var habitHistoryByDay: [String: [String]] = [:] {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            persistHabitHistory()
+        }
+    }
+    private var lastRoutineDay: String = DailyCheckInStore.ymd(for: .now) {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            defaults.set(lastRoutineDay, forKey: namespacedKey(Keys.lastRoutineDay))
+        }
+    }
 
     var hasCompletedEntryOnboarding: Bool {
         didSet {
@@ -492,12 +550,53 @@ final class AppModel {
 
     var trackerCompletionCount: Int {
         [
-            trackerState.waterIntake > 0,
-            trackerState.caloriesLogged > 0,
-            trackerState.exerciseMinutes > 0
+            trackerState.waterIntake >= trackerState.waterGoal,
+            trackerState.electrolyteIntake >= trackerState.electrolyteGoal
         ]
         .filter { $0 }
         .count
+    }
+
+    var habitStreakSummaries: [HabitStreakSummary] {
+        let routineHabitSummaries = routineSections
+            .flatMap(\.steps)
+            .map { step in
+                HabitStreakSummary(
+                    id: step.id,
+                    title: step.title,
+                    detail: step.isComplete ? "Completed today" : step.detail,
+                    symbol: step.symbol,
+                    accent: step.accent,
+                    currentStreak: habitStreak(for: step.id),
+                    isCompletedToday: step.isComplete,
+                    progressLabel: nil
+                )
+            }
+
+        let hydrationSummaries = [
+            HabitStreakSummary(
+                id: Self.waterHabitID,
+                title: "Water",
+                detail: trackerState.waterIntake >= trackerState.waterGoal ? "Goal hit today" : "Keep hydration moving",
+                symbol: "drop.fill",
+                accent: .mint,
+                currentStreak: habitStreak(for: Self.waterHabitID),
+                isCompletedToday: didCompleteHabitToday(Self.waterHabitID),
+                progressLabel: "\(trackerState.waterIntake)/\(trackerState.waterGoal) cups"
+            ),
+            HabitStreakSummary(
+                id: Self.electrolyteHabitID,
+                title: "Electrolytes",
+                detail: trackerState.electrolyteIntake >= trackerState.electrolyteGoal ? "Goal hit today" : "Add your electrolyte check-in",
+                symbol: "bolt.heart.fill",
+                accent: .dawn,
+                currentStreak: habitStreak(for: Self.electrolyteHabitID),
+                isCompletedToday: didCompleteHabitToday(Self.electrolyteHabitID),
+                progressLabel: "\(trackerState.electrolyteIntake)/\(trackerState.electrolyteGoal) servings"
+            )
+        ]
+
+        return routineHabitSummaries + hydrationSummaries
     }
 
     var dailyRoutineSections: [RoutineSection] {
@@ -625,11 +724,15 @@ final class AppModel {
     }
 
     func toggleStep(_ stepID: String) {
+        refreshForCurrentDate()
+
         if completedStepIDs.contains(stepID) {
             completedStepIDs.remove(stepID)
+            updateHabitHistory(for: stepID, isCompleted: false)
         } else {
             completedStepIDs.insert(stepID)
             routineXP += xpReward(for: stepID)
+            updateHabitHistory(for: stepID, isCompleted: true)
         }
     }
 
@@ -674,15 +777,72 @@ final class AppModel {
     }
 
     func adjustWaterIntake(by amount: Int) {
+        refreshForCurrentDate()
         trackerState.waterIntake = max(0, trackerState.waterIntake + amount)
+        syncTrackerHabitHistory()
+    }
+
+    func adjustElectrolyteIntake(by amount: Int) {
+        refreshForCurrentDate()
+        trackerState.electrolyteIntake = max(0, trackerState.electrolyteIntake + amount)
+        syncTrackerHabitHistory()
     }
 
     func adjustCalories(by amount: Int) {
+        refreshForCurrentDate()
         trackerState.caloriesLogged = max(0, trackerState.caloriesLogged + amount)
     }
 
     func adjustExerciseMinutes(by amount: Int) {
+        refreshForCurrentDate()
         trackerState.exerciseMinutes = max(0, trackerState.exerciseMinutes + amount)
+    }
+
+    func refreshForCurrentDate(now: Date = .now) {
+        let todayKey = DailyCheckInStore.ymd(for: now)
+        guard lastRoutineDay != todayKey else {
+            return
+        }
+
+        completedStepIDs.removeAll()
+        trackerState.waterIntake = 0
+        trackerState.electrolyteIntake = 0
+        trackerState.caloriesLogged = 0
+        trackerState.exerciseMinutes = 0
+        lastRoutineDay = todayKey
+    }
+
+    func habitStreak(for habitID: String, now: Date = .now) -> Int {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        var streak = 0
+
+        for offset in 0..<366 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else {
+                break
+            }
+
+            let key = DailyCheckInStore.ymd(for: date)
+            let didComplete = habitHistoryByDay[key]?.contains(habitID) == true
+
+            if didComplete {
+                streak += 1
+                continue
+            }
+
+            if offset == 0 {
+                continue
+            }
+
+            break
+        }
+
+        return streak
+    }
+
+    func didCompleteHabitToday(_ habitID: String, now: Date = .now) -> Bool {
+        let todayKey = DailyCheckInStore.ymd(for: now)
+        return habitHistoryByDay[todayKey]?.contains(habitID) == true
     }
 
     private func step(
@@ -716,6 +876,14 @@ final class AppModel {
         }
 
         defaults.set(data, forKey: namespacedKey(Keys.trackerState))
+    }
+
+    private func persistHabitHistory() {
+        guard let data = try? JSONEncoder().encode(habitHistoryByDay) else {
+            return
+        }
+
+        defaults.set(data, forKey: namespacedKey(Keys.habitHistory))
     }
 
     private func persistCompletedStepIDs() {
@@ -829,6 +997,26 @@ final class AppModel {
         } else {
             trackerState = RoutineTrackerState()
         }
+
+        let habitHistoryKey = namespacedKey(Keys.habitHistory)
+        if
+            let data = defaults.data(forKey: habitHistoryKey),
+            let decoded = try? JSONDecoder().decode([String: [String]].self, from: data)
+        {
+            habitHistoryByDay = decoded
+        } else {
+            habitHistoryByDay = [:]
+        }
+
+        let lastRoutineDayKey = namespacedKey(Keys.lastRoutineDay)
+        if let savedDay = defaults.string(forKey: lastRoutineDayKey) {
+            lastRoutineDay = savedDay
+        } else {
+            lastRoutineDay = DailyCheckInStore.ymd(for: .now)
+        }
+
+        refreshForCurrentDate()
+        syncTrackerHabitHistory()
     }
 
     private func migrateLegacyStateIfNeeded(to userID: String?) {
@@ -842,7 +1030,9 @@ final class AppModel {
             defaults.data(forKey: namespacedKey(Keys.routineProfile, namespace: destinationNamespace)) != nil ||
             defaults.data(forKey: namespacedKey(Keys.completedStepIDs, namespace: destinationNamespace)) != nil ||
             defaults.object(forKey: namespacedKey(Keys.routineXP, namespace: destinationNamespace)) != nil ||
-            defaults.data(forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace)) != nil
+            defaults.data(forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace)) != nil ||
+            defaults.data(forKey: namespacedKey(Keys.habitHistory, namespace: destinationNamespace)) != nil ||
+            defaults.string(forKey: namespacedKey(Keys.lastRoutineDay, namespace: destinationNamespace)) != nil
 
         guard !hasDestinationState else {
             return
@@ -853,6 +1043,8 @@ final class AppModel {
         let guestCompletedKey = Self.namespacedKey(Keys.completedStepIDs, namespace: "guest")
         let guestXPKey = Self.namespacedKey(Keys.routineXP, namespace: "guest")
         let guestTrackerKey = Self.namespacedKey(Keys.trackerState, namespace: "guest")
+        let guestHabitHistoryKey = Self.namespacedKey(Keys.habitHistory, namespace: "guest")
+        let guestLastRoutineDayKey = Self.namespacedKey(Keys.lastRoutineDay, namespace: "guest")
 
         if let guestOnboarding = defaults.object(forKey: guestOnboardingKey) {
             defaults.set(guestOnboarding, forKey: namespacedKey(Keys.hasCompletedOnboarding, namespace: destinationNamespace))
@@ -878,6 +1070,14 @@ final class AppModel {
             defaults.set(guestTracker, forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace))
         } else if let legacyTracker = defaults.data(forKey: Keys.trackerState) {
             defaults.set(legacyTracker, forKey: namespacedKey(Keys.trackerState, namespace: destinationNamespace))
+        }
+
+        if let guestHabitHistory = defaults.data(forKey: guestHabitHistoryKey) {
+            defaults.set(guestHabitHistory, forKey: namespacedKey(Keys.habitHistory, namespace: destinationNamespace))
+        }
+
+        if let guestLastRoutineDay = defaults.string(forKey: guestLastRoutineDayKey) {
+            defaults.set(guestLastRoutineDay, forKey: namespacedKey(Keys.lastRoutineDay, namespace: destinationNamespace))
         }
     }
 
@@ -920,4 +1120,37 @@ final class AppModel {
         ?? FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
         ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     }
+
+    private func updateHabitHistory(for habitID: String, isCompleted: Bool, now: Date = .now) {
+        let dayKey = DailyCheckInStore.ymd(for: now)
+        var completedHabits = Set(habitHistoryByDay[dayKey] ?? [])
+
+        if isCompleted {
+            completedHabits.insert(habitID)
+        } else {
+            completedHabits.remove(habitID)
+        }
+
+        if completedHabits.isEmpty {
+            habitHistoryByDay.removeValue(forKey: dayKey)
+        } else {
+            habitHistoryByDay[dayKey] = completedHabits.sorted()
+        }
+    }
+
+    private func syncTrackerHabitHistory(now: Date = .now) {
+        updateHabitHistory(
+            for: Self.waterHabitID,
+            isCompleted: trackerState.waterIntake >= trackerState.waterGoal,
+            now: now
+        )
+        updateHabitHistory(
+            for: Self.electrolyteHabitID,
+            isCompleted: trackerState.electrolyteIntake >= trackerState.electrolyteGoal,
+            now: now
+        )
+    }
+
+    private static let waterHabitID = "water"
+    private static let electrolyteHabitID = "electrolytes"
 }

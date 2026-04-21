@@ -9,10 +9,12 @@ import SwiftUI
 
 struct AIscendChatScreenContainer: View {
     let session: AuthSessionStore
+    @Binding private var pendingDraft: String?
     @State private var viewModel: AIscendChatViewModel
 
-    init(session: AuthSessionStore) {
+    init(session: AuthSessionStore, pendingDraft: Binding<String?> = .constant(nil)) {
         self.session = session
+        self._pendingDraft = pendingDraft
         _viewModel = State(initialValue: AIscendChatViewModel(session: session))
     }
 
@@ -21,6 +23,24 @@ struct AIscendChatScreenContainer: View {
             .task(id: session.user?.id) {
                 await viewModel.syncWithSession()
             }
+            .task(id: pendingDraft) {
+                consumePendingDraftIfNeeded()
+            }
+    }
+
+    private func consumePendingDraftIfNeeded() {
+        guard let pendingDraft else {
+            return
+        }
+
+        let trimmedDraft = pendingDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedDraft.isEmpty else {
+            self.pendingDraft = nil
+            return
+        }
+
+        viewModel.preparePrefilledDraft(trimmedDraft)
+        self.pendingDraft = nil
     }
 }
 
@@ -101,6 +121,9 @@ private struct AIscendChatScreen: View {
                 if isPresented {
                     dismissComposer()
                 }
+            }
+            .onChange(of: viewModel.composerFocusRequestToken) { _, _ in
+                composerFocused = true
             }
         }
     }

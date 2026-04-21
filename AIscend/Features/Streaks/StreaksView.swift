@@ -39,6 +39,10 @@ struct StreaksView: View {
         max(snapshot.nextMilestone - snapshot.currentStreak, 0)
     }
 
+    private var heroWeek: [StreakDayModel] {
+        Array(snapshot.recentDays.suffix(7))
+    }
+
     var body: some View {
         ZStack {
             AIscendBackdrop()
@@ -48,10 +52,7 @@ struct StreaksView: View {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
                     topBar
                     heroCard
-                    todayStatusCard
-                    streakHistoryCard
-                    achievementCard
-                    reminderCard
+                    streakSummaryCard
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
@@ -83,7 +84,7 @@ struct StreaksView: View {
     private var topBar: some View {
         HStack {
             AIscendBadge(
-                title: "Consistency Engine",
+                title: "Daily streak",
                 symbol: "flame.fill",
                 style: .accent
             )
@@ -110,28 +111,111 @@ struct StreaksView: View {
 
     private var heroCard: some View {
         DashboardGlassCard(tone: .hero) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack(alignment: .top, spacing: AIscendTheme.Spacing.large) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        AIscendSectionHeader(
-                            eyebrow: "Streak status",
-                            title: snapshot.statusTitle,
-                            subtitle: snapshot.motivationalLine
+            VStack(alignment: .center, spacing: AIscendTheme.Spacing.large) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    AIscendTheme.Colors.accentAmber.opacity(0.34),
+                                    AIscendTheme.Colors.accentDeep.opacity(0.18),
+                                    .clear
+                                ],
+                                center: .center,
+                                startRadius: 14,
+                                endRadius: 110
+                            )
                         )
+                        .frame(width: 180, height: 180)
 
-                        HStack(spacing: AIscendTheme.Spacing.small) {
-                            StreaksMetricChip(title: "Current", value: "\(snapshot.currentStreak)d")
-                            StreaksMetricChip(title: "Best", value: "\(snapshot.bestStreak)d")
-                            StreaksMetricChip(title: "Freezes", value: "\(snapshot.freezesRemaining)")
-                        }
+                    Image(systemName: snapshot.checkedInToday ? "flame.fill" : "flame")
+                        .font(.system(size: 80, weight: .bold))
+                        .foregroundStyle(AIscendTheme.Colors.accentAmber)
+                }
+
+                VStack(spacing: AIscendTheme.Spacing.xxSmall) {
+                    ViewThatFits {
+                        streakCountBlock(numberSize: 90, labelSize: 26)
+                        streakCountBlock(numberSize: 74, labelSize: 22)
                     }
 
-                    Spacer(minLength: 0)
+                    Text(snapshot.checkedInToday ? "You're on fire." : "Your check-in is still open.")
+                        .aiscendTextStyle(.sectionTitle)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AIscendTheme.Spacing.small)
 
-                    DashboardRoutineDial(
-                        progress: max(snapshot.progressToNextMilestone, 0.06),
-                        streakDays: max(snapshot.currentStreak, 0)
-                    )
+                    Text(snapshot.motivationalLine)
+                        .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                }
+
+                StreakHeroWeekRow(days: heroWeek)
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        Button(action: onOpenCheckIn) {
+                            AIscendButtonLabel(
+                                title: snapshot.checkedInToday ? "Review Check-In" : "Check In",
+                                leadingSymbol: "calendar.badge.checkmark"
+                            )
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                        Button {
+                            shareCoordinator.present(
+                                .streakMilestone(snapshot: snapshot)
+                            )
+                        } label: {
+                            AIscendButtonLabel(title: "Share", leadingSymbol: "square.and.arrow.up")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    }
+
+                    VStack(spacing: AIscendTheme.Spacing.small) {
+                        Button(action: onOpenCheckIn) {
+                            AIscendButtonLabel(
+                                title: snapshot.checkedInToday ? "Review Check-In" : "Check In",
+                                leadingSymbol: "calendar.badge.checkmark"
+                            )
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                        Button {
+                            shareCoordinator.present(
+                                .streakMilestone(snapshot: snapshot)
+                            )
+                        } label: {
+                            AIscendButtonLabel(title: "Share", leadingSymbol: "square.and.arrow.up")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                    }
+                }
+            }
+        }
+    }
+
+    private var streakSummaryCard: some View {
+        DashboardGlassCard {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                AIscendSectionHeader(
+                    eyebrow: "Check-in status",
+                    title: snapshot.checkedInToday ? "Today's check-in is locked" : "Protect today's chain",
+                    subtitle: snapshot.checkedInToday
+                    ? "Your daily streak is protected. Refresh the note only if you want a cleaner reflection."
+                    : "A quick check-in keeps the streak alive and makes the progress feel real."
+                )
+
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    StreaksMetricChip(title: "Current", value: "\(snapshot.currentStreak)d")
+                    StreaksMetricChip(title: "Best", value: "\(snapshot.bestStreak)d")
+                    StreaksMetricChip(title: "Check-ins", value: "\(snapshot.totalCheckIns)")
+                }
+
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    StreaksMetricChip(title: "Next goal", value: "\(snapshot.nextMilestone)d")
+                    StreaksMetricChip(title: "Badges", value: "\(badgeManager.earnedCount)")
+                    StreaksMetricChip(title: "Rate", value: "\(Int((snapshot.recentCompletionRate * 100).rounded()))%")
                 }
 
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
@@ -146,31 +230,45 @@ struct StreaksView: View {
                     }
 
                     StreakMilestoneProgressBar(progress: snapshot.progressToNextMilestone)
-
-                    Text("Recent completion rate: \(Int((snapshot.recentCompletionRate * 100).rounded()))%")
-                        .aiscendTextStyle(.secondaryBody)
                 }
 
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    AIScendShareEntryButton(title: "Share streak") {
-                        shareCoordinator.present(
-                            .streakMilestone(snapshot: snapshot)
-                        )
-                    }
+                if snapshot.usedFreezeRecently {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(AIscendTheme.Colors.accentGlow)
 
-                    if let badge = earnedHighlights.first {
-                        AIScendShareEntryButton(title: "Share badge") {
-                            shareCoordinator.present(
-                                .badgeUnlock(
-                                    badge: badge,
-                                    totalBadges: badgeManager.earnedCount,
-                                    currentStreak: snapshot.currentStreak
-                                )
-                            )
-                        }
+                        Text("A freeze protected the streak recently. \(snapshot.freezesRemaining) remaining.")
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
                     }
+                    .padding(AIscendTheme.Spacing.medium)
+                    .background(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                    )
                 }
             }
+        }
+    }
+
+    private func streakCountBlock(numberSize: CGFloat, labelSize: CGFloat) -> some View {
+        VStack(spacing: AIscendTheme.Spacing.xxSmall) {
+            Text("\(snapshot.currentStreak)")
+                .font(.system(size: numberSize, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(AIscendTheme.Colors.accentAmber)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Text(snapshot.currentStreak == 1 ? "day streak" : "days streak")
+                .font(.system(size: labelSize, weight: .medium, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.accentAmber)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 
@@ -377,6 +475,60 @@ struct StreaksView: View {
                     .buttonStyle(AIscendButtonStyle(variant: .secondary))
                 }
             }
+        }
+    }
+}
+
+private struct StreakHeroWeekRow: View {
+    let days: [StreakDayModel]
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            ForEach(days) { day in
+                VStack(spacing: AIscendTheme.Spacing.xxSmall) {
+                    Text(String(day.weekdayLabel.prefix(1)))
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                    ZStack {
+                        Circle()
+                            .fill(fillColor(for: day))
+                            .frame(width: 30, height: 30)
+
+                        if day.status == .completed {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color(hex: "1A1410"))
+                        } else if day.status == .pending {
+                            Circle()
+                                .stroke(AIscendTheme.Colors.accentAmber.opacity(0.45), lineWidth: 1.5)
+                                .frame(width: 30, height: 30)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(Color.white.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func fillColor(for day: StreakDayModel) -> Color {
+        switch day.status {
+        case .completed:
+            AIscendTheme.Colors.accentAmber
+        case .pending:
+            Color.clear
+        case .missed:
+            Color(hex: "231A15")
+        case .future:
+            Color(hex: "181616")
         }
     }
 }

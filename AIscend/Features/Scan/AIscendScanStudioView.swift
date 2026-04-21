@@ -121,6 +121,7 @@ struct AIscendScanStudioView: View {
         case .previousScans:
             AIscendPreviousScansStudioPage(
                 selection: $selectedTab,
+                snapshot: snapshot,
                 session: session,
                 onOpenScanRecord: { record in
                     let resolvedID = record.meta.scanId?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -139,15 +140,84 @@ struct AIscendScanStudioView: View {
 }
 
 private struct ScanStudioHeader: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            Text("Scan")
-                .aiscendTextStyle(.heroTitle, color: AIscendTheme.Colors.textPrimary)
+    let snapshot: DashboardSnapshot
 
-            Text("Keep it simple. Start a new scan or review your scan archive.")
-                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+    var body: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                ScanStudioBadge(title: "Scan Studio", symbol: "viewfinder.circle.fill")
+                ScanStudioBadge(title: "\(snapshot.scans.count) saved", symbol: "clock.fill")
+            }
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                Text("Scan")
+                    .aiscendTextStyle(.heroTitle, color: AIscendTheme.Colors.textPrimary)
+
+                Text("Capture a new scan or revisit your archive with a cleaner, more focused workspace.")
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+            }
+
+            HStack(spacing: AIscendTheme.Spacing.small) {
+                studioMetric(title: "Latest", value: "\(snapshot.score)")
+                studioMetric(title: "Scans", value: "\(snapshot.scans.count)")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func studioMetric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+            Text(value)
+                .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AIscendTheme.Spacing.medium)
+        .padding(.vertical, AIscendTheme.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.10),
+                            AIscendTheme.Colors.surfaceHighlight.opacity(0.76)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct ScanStudioBadge: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+
+            Text(title)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+        }
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 8)
+        .background(
+            Capsule(style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
     }
 }
 
@@ -186,7 +256,20 @@ private struct ScanStudioModeToggle: View {
                         .padding(.horizontal, AIscendTheme.Spacing.small)
                         .background(
                             Capsule(style: .continuous)
-                                .fill(selection == tab ? AnyShapeStyle(Color.white) : AnyShapeStyle(Color.clear))
+                                .fill(
+                                    selection == tab
+                                    ? AnyShapeStyle(
+                                        LinearGradient(
+                                            colors: [
+                                                Color.white,
+                                                Color.white.opacity(0.92)
+                                            ],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    : AnyShapeStyle(Color.clear)
+                                )
                         )
                         .overlay(
                             Capsule(style: .continuous)
@@ -194,6 +277,12 @@ private struct ScanStudioModeToggle: View {
                                     selection == tab ? AIscendTheme.Colors.accentGlow.opacity(0.24) : Color.clear,
                                     lineWidth: 1
                                 )
+                        )
+                        .shadow(
+                            color: selection == tab ? Color.black.opacity(0.16) : .clear,
+                            radius: 10,
+                            x: 0,
+                            y: 6
                         )
                     }
                     .buttonStyle(.plain)
@@ -205,7 +294,16 @@ private struct ScanStudioModeToggle: View {
             .padding(6)
             .background(
                 Capsule(style: .continuous)
-                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.62))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.08),
+                                AIscendTheme.Colors.surfaceHighlight.opacity(0.78)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
             )
             .overlay(
                 Capsule(style: .continuous)
@@ -224,7 +322,7 @@ private struct AIscendNewScanStudioPage: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                ScanStudioHeader()
+                ScanStudioHeader(snapshot: snapshot)
                 ScanStudioModeToggle(selection: $selection)
                 AIscendNewScanTabView(
                     snapshot: snapshot,
@@ -243,24 +341,28 @@ private struct AIscendNewScanStudioPage: View {
 
 private struct AIscendPreviousScansStudioPage: View {
     @Binding var selection: ScanStudioTab
+    let snapshot: DashboardSnapshot
     let session: AuthSessionStore
     let onOpenScanRecord: (PersistedScanRecord) -> Void
     let onStartNewScan: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            ScanStudioHeader()
-            ScanStudioModeToggle(selection: $selection)
-            AIscendPreviousScansTabView(
-                session: session,
-                onOpenScanRecord: onOpenScanRecord,
-                onStartNewScan: onStartNewScan
-            )
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                ScanStudioHeader(snapshot: snapshot)
+                ScanStudioModeToggle(selection: $selection)
+                AIscendPreviousScansTabView(
+                    session: session,
+                    embedded: true,
+                    onOpenScanRecord: onOpenScanRecord,
+                    onStartNewScan: onStartNewScan
+                )
+            }
+            .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+            .padding(.top, AIscendTheme.Spacing.large)
+            .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-        .padding(.top, AIscendTheme.Spacing.large)
-        .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scan-studio-previous-scans-page")
     }
@@ -274,6 +376,8 @@ private struct AIscendNewScanTabView: View {
         DashboardGlassCard(tone: .hero) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
+                    ScanStudioBadge(title: "Capture Flow", symbol: "camera.metering.center.weighted")
+
                     Text("New Scan")
                         .aiscendTextStyle(.sectionTitle)
 
@@ -291,6 +395,12 @@ private struct AIscendNewScanTabView: View {
                         title: "Current",
                         value: "\(snapshot.score)"
                     )
+                }
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    scanChecklistRow(title: "Front photo", detail: "Neutral expression, camera straight on.")
+                    scanChecklistRow(title: "Side photo", detail: "Clear profile with clean jaw and neck line.")
+                    scanChecklistRow(title: "Send to engine", detail: "AIScend packages both shots into a fresh result.")
                 }
 
                 Button(action: onStartNewScan) {
@@ -325,16 +435,35 @@ private struct AIscendNewScanTabView: View {
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
+
+    private func scanChecklistRow(title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+
+                Text(detail)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+            }
+        }
+    }
 }
 
 private struct AIscendPreviousScansTabView: View {
     let session: AuthSessionStore
+    var embedded: Bool = false
     let onOpenScanRecord: (PersistedScanRecord) -> Void
     let onStartNewScan: () -> Void
 
     var body: some View {
         AIscendPreviousScansView(
             session: session,
+            embedded: embedded,
             onOpenScanRecord: onOpenScanRecord,
             onStartNewScan: onStartNewScan
         )

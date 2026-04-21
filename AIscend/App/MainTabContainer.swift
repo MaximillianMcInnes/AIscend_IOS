@@ -20,7 +20,7 @@ enum MainTabDestination: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .home:
-            "Today"
+            "Dashboard"
         case .routine:
             "Routine"
         case .scan:
@@ -50,6 +50,8 @@ enum MainTabDestination: String, CaseIterable, Identifiable {
 
 struct MainTabContainer: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("aiscend.dailyCheckIn.lastRoutineStreakPromptDay")
+    private var lastRoutineStreakPromptDay = ""
 
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
@@ -62,11 +64,14 @@ struct MainTabContainer: View {
     @State private var showingStreaks = false
     @State private var showingScanCapture = false
     @State private var showingScanResults = false
+    @State private var pendingChatPrompt: String?
     @State private var isKeyboardPresented = false
     @State private var usesQuickFadeSelection = false
     @StateObject private var badgeManager = BadgeManager()
     @StateObject private var dailyCheckInStore = DailyCheckInStore()
     @StateObject private var dailyPhotoStore = DailyPhotoStore()
+    @StateObject private var hydrationStore = HydrationTrackingStore()
+    @StateObject private var electrolyteStore = ElectrolyteTrackingStore()
     @StateObject private var notificationManager = NotificationManager()
     @Namespace private var tabNamespace
 
@@ -95,18 +100,35 @@ struct MainTabContainer: View {
         .animation(.easeOut(duration: 0.22), value: shouldShowTabBar)
         .task(id: session.user?.id) {
             dailyPhotoStore.applyAuthenticatedUserID(session.user?.id)
+            hydrationStore.applyAuthenticatedUserID(session.user?.id)
+            electrolyteStore.applyAuthenticatedUserID(session.user?.id)
+            model.refreshForCurrentDate()
             dailyCheckInStore.refreshForCurrentDate()
+            hydrationStore.importLegacyIfNeeded(
+                waterCups: model.trackerState.waterIntake,
+                waterGoalCups: model.trackerState.waterGoal
+            )
+            electrolyteStore.importLegacyIfNeeded(servings: model.trackerState.electrolyteIntake)
+            if session.user != nil {
+                await notificationManager.activateRemindersForSignedInUser()
+            }
             maybePresentDailyPhotoPrompt(.firstOpen)
+            maybePresentRoutineStreakPromptIfNeeded()
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                model.refreshForCurrentDate()
                 dailyCheckInStore.refreshForCurrentDate()
                 maybePresentDailyPhotoPrompt(.engagement)
+                maybePresentRoutineStreakPromptIfNeeded()
             }
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 maybePresentDailyPhotoPrompt(.engagement)
+                if newValue == .routine {
+                    maybePresentRoutineStreakPromptIfNeeded()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -117,7 +139,7 @@ struct MainTabContainer: View {
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             withAnimation(.easeOut(duration: 0.22)) {
                 isKeyboardPresented = false
-            }	
+            }
         }
         .sheet(isPresented: $showingDailyPhotoCapture) {
             DailyPhotoCaptureSheet(
@@ -235,8 +257,11 @@ struct MainTabContainer: View {
                 session: session,
                 dailyCheckInStore: dailyCheckInStore,
                 dailyPhotoStore: dailyPhotoStore,
+                hydrationStore: hydrationStore,
+                electrolyteStore: electrolyteStore,
                 badgeManager: badgeManager,
                 onOpenAdvisor: { select(.chat) },
+                onOpenHydrationChat: openHydrationChat,
                 onOpenRoutine: { select(.routine) },
                 onOpenCheckIn: { showingDailyCheckIn = true },
                 onOpenConsistency: { showingStreaks = true },
@@ -267,9 +292,12 @@ struct MainTabContainer: View {
             RoutineCleanSlateView(
                 model: model,
                 dailyCheckInStore: dailyCheckInStore,
+                hydrationStore: hydrationStore,
+                electrolyteStore: electrolyteStore,
                 badgeManager: badgeManager,
                 onOpenCheckIn: { showingDailyCheckIn = true },
                 onOpenConsistency: { showingStreaks = true },
+                onOpenHydrationChat: openHydrationChat,
                 onRefine: { model.resetOnboarding() }
             )
             .toolbar(.hidden, for: .navigationBar)
@@ -295,7 +323,7 @@ struct MainTabContainer: View {
 
     private var chatTab: some View {
         NavigationStack {
-            AIscendChatScreenContainer(session: session)
+            AIscendChatScreenContainer(session: session, pendingDraft: $pendingChatPrompt)
                 .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -345,6 +373,28 @@ struct MainTabContainer: View {
         showingDailyPhotoCapture = true
     }
 
+    private func maybePresentRoutineStreakPromptIfNeeded(now: Date = .now) {
+        guard !Self.shouldDisableDailyStreakPromptsForUITests() else {
+            return
+        }
+
+        guard selectedTab == .routine else {
+            return
+        }
+
+        guard !isPresentingBlockingModal else {
+            return
+        }
+
+        let todayKey = DailyCheckInStore.ymd(for: now)
+        guard lastRoutineStreakPromptDay != todayKey else {
+            return
+        }
+
+        lastRoutineStreakPromptDay = todayKey
+        showingStreaks = true
+    }
+
     private func select(_ tab: MainTabDestination) {
         guard tab != selectedTab else {
             return
@@ -371,6 +421,13 @@ struct MainTabContainer: View {
 
         homePath.append(.profile)
     }
+
+    private func openHydrationChat(_ prompt: String) {
+        pendingChatPrompt = prompt
+        if selectedTab != .chat {
+            select(.chat)
+        }
+    }
 }
 
 private extension MainTabContainer {
@@ -389,6 +446,12 @@ private extension MainTabContainer {
         arguments: [String] = ProcessInfo.processInfo.arguments
     ) -> Bool {
         arguments.contains("--uitest-disable-daily-photo-prompts")
+    }
+
+    static func shouldDisableDailyStreakPromptsForUITests(
+        arguments: [String] = ProcessInfo.processInfo.arguments
+    ) -> Bool {
+        arguments.contains("--uitest-disable-daily-streak-prompts")
     }
 
     enum HomeDestination: Hashable {

@@ -48,37 +48,6 @@ enum AIScendReminderKind: String, CaseIterable, Identifiable, Codable, Sendable 
             "aiscend.notifications.routine"
         }
     }
-
-    fileprivate var defaultTime: DateComponents {
-        switch self {
-        case .dailyCheckIn:
-            DateComponents(hour: 20, minute: 30)
-        case .streakProtection:
-            DateComponents(hour: 18, minute: 45)
-        case .routine:
-            DateComponents(hour: 9, minute: 15)
-        }
-    }
-
-    fileprivate var content: (title: String, body: String) {
-        switch self {
-        case .dailyCheckIn:
-            (
-                "Keep the chain clean",
-                "Today's AIScend check-in is still open. Lock it in before the day closes."
-            )
-        case .streakProtection:
-            (
-                "Don't break the streak",
-                "Your current run is still alive. Protect it with a fast nightly check-in."
-            )
-        case .routine:
-            (
-                "Move the plan forward",
-                "A clean routine day compounds faster than another day of drift."
-            )
-        }
-    }
 }
 
 struct AIScendNotificationPreferences: Codable, Hashable, Sendable {
@@ -252,6 +221,14 @@ final class NotificationManager: ObservableObject {
         await syncScheduledReminders(requestAuthorizationIfNeeded: true)
     }
 
+    func activateRemindersForSignedInUser() async {
+        guard preferences.anyEnabled else {
+            return
+        }
+
+        await syncScheduledReminders(requestAuthorizationIfNeeded: true)
+    }
+
     func syncScheduledReminders(requestAuthorizationIfNeeded shouldRequestAuthorizationIfNeeded: Bool = true) async {
         if shouldRequestAuthorizationIfNeeded {
             guard await requestAuthorizationIfNeeded() else {
@@ -279,18 +256,42 @@ final class NotificationManager: ObservableObject {
     }
 
     private func scheduleCalendarReminder(kind: AIScendReminderKind) {
+        let schedule = reminderSchedule(for: kind)
         let content = UNMutableNotificationContent()
-        content.title = kind.content.title
-        content.body = kind.content.body
+        content.title = schedule.title
+        content.body = schedule.body
         content.sound = .default
 
         let request = UNNotificationRequest(
             identifier: kind.identifier,
             content: content,
-            trigger: UNCalendarNotificationTrigger(dateMatching: kind.defaultTime, repeats: true)
+            trigger: UNCalendarNotificationTrigger(dateMatching: schedule.time, repeats: true)
         )
 
         UNUserNotificationCenter.current().add(request)
+    }
+
+    private func reminderSchedule(for kind: AIScendReminderKind) -> (time: DateComponents, title: String, body: String) {
+        switch kind {
+        case .dailyCheckIn:
+            (
+                time: DateComponents(hour: 20, minute: 30),
+                title: "Keep your streak alive",
+                body: "Open the routine, finish today's check-in, and lock in the streak before the day closes."
+            )
+        case .streakProtection:
+            (
+                time: DateComponents(hour: 18, minute: 45),
+                title: "Protect today's run",
+                body: "Your streak is still live. Jump back into the routine and protect it with a fast check-in."
+            )
+        case .routine:
+            (
+                time: DateComponents(hour: 9, minute: 15),
+                title: "Keep the routine moving",
+                body: "Open your routine early, keep the day clean, and make tonight's streak check-in easy."
+            )
+        }
     }
 
     private func currentSettings() async -> UNNotificationSettings {
