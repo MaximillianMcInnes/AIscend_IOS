@@ -869,11 +869,12 @@ struct MoreHubView: View {
                     .buttonStyle(.plain)
 
                     ForEach(MoreHubTab.placeholderTabs) { tab in
-                        Button {
-                            selectedTab = tab
-                        } label: {
+                        NavigationLink(value: tab.destination) {
                             MoreHubTabChip(tab: tab, isSelected: selectedTab == tab)
                         }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            selectedTab = tab
+                        })
                         .buttonStyle(.plain)
                     }
                 }
@@ -895,6 +896,10 @@ struct MoreHubView: View {
                     badgeManager: badgeManager,
                     notificationManager: notificationManager
                 )
+            case .lookalike:
+                MoreLabDetailView(section: .lookalike)
+            case .skinLab:
+                MoreLabDetailView(section: .skinLab)
             }
         }
     }
@@ -921,10 +926,23 @@ private enum MoreHubTab: String, CaseIterable, Identifiable {
             "sparkles"
         }
     }
+
+    var destination: MoreHubDestination {
+        switch self {
+        case .profile:
+            .profile
+        case .lookalike:
+            .lookalike
+        case .skinLab:
+            .skinLab
+        }
+    }
 }
 
 private enum MoreHubDestination: Hashable {
     case profile
+    case lookalike
+    case skinLab
 }
 
 private struct MoreHubTabChip: View {
@@ -1231,6 +1249,7 @@ private struct MoreHubDestinationCard: View {
 }
 
 private struct MoreLabDetailView: View {
+    @Environment(\.dismiss) private var dismiss
     let section: MoreHubSection
 
     var body: some View {
@@ -1240,6 +1259,25 @@ private struct MoreLabDetailView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                    HStack {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    Circle()
+                                        .fill(AIscendTheme.Colors.surfaceGlass)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Close \(section.title)")
+
+                        Spacer(minLength: 0)
+                    }
+
                     AIscendEditorialHeroCard(
                         eyebrow: section.heroEyebrow,
                         title: section.heroTitle,
@@ -1744,6 +1782,8 @@ struct AccountView: View {
     @State private var selectedAvatarItem: PhotosPickerItem?
     @State private var profileMessage: String?
     @State private var isSavingProfile = false
+    @State private var isDeletingAccount = false
+    @State private var showingAccountDeletionConfirmation = false
     @State private var hasHydratedProfileEditor = false
 
     var body: some View {
@@ -1772,6 +1812,21 @@ struct AccountView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+        .confirmationDialog(
+            "Delete account?",
+            isPresented: $showingAccountDeletionConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete account", role: .destructive) {
+                Task {
+                    await deleteAccount()
+                }
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your AIscend account and clears this device's account data. You may need to sign in again first if the session is old.")
+        }
         .task {
             await notificationManager.refreshAuthorizationStatus()
             hydrateProfileEditorIfNeeded()
@@ -2142,6 +2197,20 @@ struct AccountView: View {
                 AIscendButtonLabel(title: "Sign out", leadingSymbol: "rectangle.portrait.and.arrow.right")
             }
             .buttonStyle(AIscendButtonStyle(variant: .destructive))
+
+            ProfileActionDivider()
+
+            Button {
+                showingAccountDeletionConfirmation = true
+            } label: {
+                AIscendButtonLabel(
+                    title: isDeletingAccount ? "Deleting account" : "Delete account",
+                    leadingSymbol: "trash.fill"
+                )
+            }
+            .buttonStyle(AIscendButtonStyle(variant: .destructive))
+            .disabled(isDeletingAccount || session.isPerformingAuthAction)
+            .accessibilityIdentifier("profile-delete-account-button")
         }
         .padding(AIscendTheme.Spacing.large)
         .aiscendPanel(.elevated)
@@ -2310,6 +2379,18 @@ struct AccountView: View {
             profileMessage = errorMessage
         } else {
             profileMessage = "Profile updated."
+        }
+    }
+
+    private func deleteAccount() async {
+        isDeletingAccount = true
+        defer { isDeletingAccount = false }
+
+        let didDelete = await session.deleteAccount()
+        if didDelete {
+            model.clearLocalAccountData()
+        } else if let errorMessage = session.errorMessage, !errorMessage.isEmpty {
+            profileMessage = errorMessage
         }
     }
 

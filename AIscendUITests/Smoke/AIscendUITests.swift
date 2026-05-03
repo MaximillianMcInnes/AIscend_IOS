@@ -9,13 +9,14 @@ import XCTest
 
 final class AIscendUITests: XCTestCase {
     private func launchApp(
+        startTab: String = "scan",
         additionalArguments: [String] = []
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = [
             "--uitest-complete-onboarding",
             "--uitest-force-signed-in",
-            "--uitest-start-tab=scan",
+            "--uitest-start-tab=\(startTab)",
             "--uitest-disable-daily-photo-prompts"
         ] + additionalArguments
         app.launch()
@@ -58,6 +59,53 @@ final class AIscendUITests: XCTestCase {
         expectation(for: NSPredicate(format: "value == %@", "Selected"), evaluatedWith: previousScansButton)
         waitForExpectations(timeout: 5)
         XCTAssertTrue(sortLabel.waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testMoreLookalikePreviewOpens() throws {
+        let app = launchApp(startTab: "more")
+
+        let lookalikeButton = app.buttons["Lookalike"]
+        XCTAssertTrue(lookalikeButton.waitForExistence(timeout: 5))
+        lookalikeButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Celebrity Lookalike"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Instant match"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testMoreSkinLabPreviewOpens() throws {
+        let app = launchApp(startTab: "more")
+
+        let skinLabButton = app.buttons["Skin Lab"]
+        XCTAssertTrue(skinLabButton.waitForExistence(timeout: 5))
+        skinLabButton.tap()
+
+        XCTAssertTrue(app.staticTexts["Skin Lab"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Texture map"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testAccountDeletionFlowCanBeInitiatedAndConfirmed() throws {
+        let app = launchApp(startTab: "more")
+
+        let profileButton = app.buttons["Profile"]
+        XCTAssertTrue(profileButton.waitForExistence(timeout: 5))
+        profileButton.tap()
+
+        let deleteAccountButton = app.buttons["profile-delete-account-button"]
+        XCTAssertTrue(deleteAccountButton.waitForExistence(timeout: 5))
+        for _ in 0..<4 where !deleteAccountButton.isHittable {
+            app.swipeUp()
+        }
+        XCTAssertTrue(deleteAccountButton.isHittable)
+        deleteAccountButton.tap()
+
+        let confirmationButton = app.buttons["Delete account"]
+        XCTAssertTrue(confirmationButton.waitForExistence(timeout: 5))
+        confirmationButton.tap()
+
+        XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 5))
     }
 
     @MainActor

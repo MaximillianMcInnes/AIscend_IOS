@@ -20,6 +20,10 @@ import FirebaseAuth
 import FirebaseCore
 #endif
 
+#if canImport(FirebaseFirestore)
+import FirebaseFirestore
+#endif
+
 #if canImport(GoogleSignIn)
 import GoogleSignIn
 #endif
@@ -254,6 +258,55 @@ final class AuthSessionStore {
         #endif
     }
 
+    func deleteAccount() async -> Bool {
+        refreshAvailability()
+
+        if let configurationMessage {
+            errorMessage = configurationMessage
+            return false
+        }
+
+        #if canImport(FirebaseAuth)
+        if user?.id == "ui-test-user", Auth.auth().currentUser == nil {
+            currentNonce = nil
+            user = nil
+            phase = .signedOut
+            errorMessage = nil
+            return true
+        }
+
+        guard let firebaseUser = Auth.auth().currentUser else {
+            errorMessage = "Sign in again before deleting this account."
+            return false
+        }
+
+        let userID = firebaseUser.uid
+        let email = firebaseUser.email
+
+        isPerformingAuthAction = true
+        defer { isPerformingAuthAction = false }
+
+        do {
+            await deleteKnownFirestoreData(userID: userID, email: email)
+            try await delete(firebaseUser: firebaseUser)
+            #if canImport(GoogleSignIn)
+            GIDSignIn.sharedInstance.signOut()
+            #endif
+            currentNonce = nil
+            user = nil
+            phase = .signedOut
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = accountDeletionMessage(for: error)
+            return false
+        }
+        #else
+        errorMessage = "FirebaseAuth is unavailable in this build."
+        return false
+        #endif
+    }
+
     func updateDisplayName(_ displayName: String) async {
         let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
@@ -439,6 +492,103 @@ final class AuthSessionStore {
             }
         }
     }
+
+    private func delete(firebaseUser: User) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            firebaseUser.delete { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+    }
+    #endif
+
+    #if canImport(FirebaseFirestore)
+    private func deleteKnownFirestoreData(userID: String, email: String?) async {
+        let firestore = Firestore.firestore()
+        let normalizedEmail = email?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let configuration = AIscendChatConfiguration.live
+        let collectionNames = [
+            "Users",
+            "Scans"
+        ] + configuration.chatCollectionCandidates + configuration.quotaCollectionCandidates
+
+        var referencesByPath: [String: DocumentReference] = [:]
+
+        func collect(_ reference: DocumentReference) {
+            referencesByPath[reference.path] = reference
+        }
+
+        collect(firestore.collection("Users").document(userID))
+
+        if let normalizedEmail, !normalizedEmail.isEmpty {
+            collect(firestore.collection("Users").document(normalizedEmail))
+        }
+
+        for collectionName in Set(collectionNames) {
+            let collection = firestore.collection(collectionName)
+
+            collect(collection.document(userID))
+
+            if let normalizedEmail, !normalizedEmail.isEmpty {
+                collect(collection.document(normalizedEmail))
+            }
+
+            for field in ["ownerUid", "ownerUID", "uid", "userID", "userId"] {
+                if let snapshot = try? await getDocuments(collection.whereField(field, isEqualTo: userID)) {
+                    snapshot.documents.forEach { collect($0.reference) }
+                }
+            }
+
+            guard let normalizedEmail, !normalizedEmail.isEmpty else {
+                continue
+            }
+
+            for field in ["email", "ownerEmail", "emailLowercased"] {
+                if let snapshot = try? await getDocuments(collection.whereField(field, isEqualTo: normalizedEmail)) {
+                    snapshot.documents.forEach { collect($0.reference) }
+                }
+            }
+        }
+
+        for reference in referencesByPath.values {
+            try? await delete(reference)
+        }
+    }
+
+    private func getDocuments(_ query: Query) async throws -> QuerySnapshot {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<QuerySnapshot, Error>) in
+            query.getDocuments { snapshot, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let snapshot {
+                    continuation.resume(returning: snapshot)
+                } else {
+                    continuation.resume(throwing: NSError(domain: "AIscendFirestore", code: -1))
+                }
+            }
+        }
+    }
+
+    private func delete(_ reference: DocumentReference) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            reference.delete { error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: ())
+                }
+            }
+        }
+    }
+    #else
+    private func deleteKnownFirestoreData(userID: String, email: String?) async {
+        let _ = userID
+        let _ = email
+    }
     #endif
 
     private func userFacingMessage(for error: Error) -> String? {
@@ -463,6 +613,18 @@ final class AuthSessionStore {
         #endif
 
         return nsError.localizedDescription
+    }
+
+    private func accountDeletionMessage(for error: Error) -> String {
+        let nsError = error as NSError
+
+        #if canImport(FirebaseAuth)
+        if AuthErrorCode(rawValue: nsError.code) == .requiresRecentLogin {
+            return "For security, sign in again and then return to Profile to delete the account."
+        }
+        #endif
+
+        return userFacingMessage(for: error) ?? "Account deletion could not be completed right now."
     }
 
     private static func sha256(_ input: String) -> String {

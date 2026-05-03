@@ -189,184 +189,33 @@ struct ScanResultsFlowView: View {
     private var resultsPager: some View {
         TabView(selection: $viewModel.currentPageIndex) {
             ForEach(Array(viewModel.pages.enumerated()), id: \.element.id) { index, page in
-                resultsPage(page, index: index)
+                ScanResultsPageHost(
+                    page: page,
+                    pageIndex: index,
+                    viewModel: viewModel,
+                    badgeManager: badgeManager,
+                    dailyCheckInStore: dailyCheckInStore,
+                    onShare: { page in
+                        presentShare(for: page)
+                    },
+                    onPresentPaywall: { variant, dismissable, sourceKey, force in
+                        presentPaywall(
+                            variant,
+                            dismissable: dismissable,
+                            sourceKey: sourceKey,
+                            force: force
+                        )
+                    },
+                    onOpenRoutine: onOpenRoutine,
+                    onOpenChat: onOpenChat,
+                    onOpenCheckIn: { showingDailyCheckIn = true },
+                    onOpenStreakHub: { showingStreakHub = true },
+                    onReturnHome: onReturnHome
+                )
                     .tag(index)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-    }
-
-    @ViewBuilder
-    private func resultsPage(_ page: ScanResultsPageID, index: Int) -> some View {
-        switch page {
-        case .overview:
-            RatingsResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                result: viewModel.result,
-                scoreCards: viewModel.scoreCards,
-                onShare: { presentShare(for: .overview) },
-                onContinue: viewModel.advance
-            )
-
-        case .placement:
-            PlacementResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                result: viewModel.result,
-                onShare: { presentShare(for: .placement) },
-                onContinue: viewModel.advance
-            )
-
-        case .harmony:
-            HarmonyResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                traits: viewModel.harmonyTraits(),
-                onShare: { presentShare(for: .harmony) },
-                onContinue: viewModel.advance
-            )
-
-        case .eyes:
-            FeatureResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                badge: viewModel.isPremium ? nil : "Preview",
-                traits: viewModel.sectionTraits(for: .eyes),
-                showsInlineUpsell: !viewModel.isPremium,
-                onShare: { presentShare(for: .eyes) },
-                onContinue: viewModel.advance,
-                onUpgrade: {
-                    paywallCoordinator.present(
-                        .lockedInsight,
-                        dismissable: true,
-                        sourceKey: "locked-eyes"
-                    )
-                }
-            )
-
-        case .lips:
-            FeatureResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                badge: nil,
-                traits: viewModel.sectionTraits(for: .lips),
-                showsInlineUpsell: false,
-                onShare: { presentShare(for: .lips) },
-                onContinue: viewModel.advance,
-                onUpgrade: {
-                    paywallCoordinator.present(
-                        .deepReport,
-                        dismissable: true,
-                        sourceKey: "lips-premium"
-                    )
-                }
-            )
-
-        case .jaw:
-            FeatureResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                badge: "Premium",
-                traits: viewModel.sectionTraits(for: .jaw),
-                showsInlineUpsell: false,
-                onShare: { presentShare(for: .jaw) },
-                onContinue: viewModel.advance,
-                onUpgrade: {
-                    paywallCoordinator.present(
-                        .deepReport,
-                        dismissable: true,
-                        sourceKey: "jaw-premium",
-                        force: true
-                    )
-                }
-            )
-
-        case .sideProfile:
-            FeatureResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                badge: "Premium",
-                traits: viewModel.sectionTraits(for: .sideProfile),
-                showsInlineUpsell: false,
-                onShare: { presentShare(for: .sideProfile) },
-                onContinue: viewModel.advance,
-                onUpgrade: {
-                    paywallCoordinator.present(
-                        .deepReport,
-                        dismissable: true,
-                        sourceKey: "side-premium",
-                        force: true
-                    )
-                }
-            )
-
-        case .premiumPush:
-            PremiumPushResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                onUpgrade: {
-                    paywallCoordinator.present(
-                        .rewardLoop,
-                        dismissable: true,
-                        sourceKey: "premium-push-primary",
-                        force: true
-                    )
-                },
-                onContinue: viewModel.advance
-            )
-
-        case .done:
-            DoneResultsPage(
-                pageIndex: index,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: page),
-                subtitle: viewModel.subtitle(for: page),
-                isPremium: viewModel.isPremium,
-                cards: viewModel.completionCards,
-                primaryTitle: viewModel.primaryDoneTitle(),
-                onPrimary: {
-                    if viewModel.isPremium {
-                        badgeManager.recordGlowUpOpened()
-                        onOpenRoutine()
-                    } else {
-                        paywallCoordinator.present(
-                            .glowUpGate,
-                            dismissable: true,
-                            sourceKey: "glow-up-gate",
-                            force: true
-                        )
-                    }
-                },
-                onOpenChat: {
-                    badgeManager.recordAdvisorOpened()
-                    onOpenChat()
-                },
-                onOpenCheckIn: { showingDailyCheckIn = true },
-                onOpenStreakHub: { showingStreakHub = true },
-                streakDays: dailyCheckInStore.snapshot.currentStreak,
-                checkedInToday: dailyCheckInStore.hasCheckedInToday,
-                badgeCount: badgeManager.earnedBadges.count,
-                onShare: { presentShare(for: .done) },
-                onReturnHome: onReturnHome
-            )
-        }
     }
 
     private var bottomChrome: some View {
@@ -396,6 +245,20 @@ struct ScanResultsFlowView: View {
             try? await Task.sleep(nanoseconds: 180_000_000)
             showingUpgrade = true
         }
+    }
+
+    private func presentPaywall(
+        _ variant: PaywallVariant,
+        dismissable: Bool,
+        sourceKey: String?,
+        force: Bool
+    ) {
+        paywallCoordinator.present(
+            variant,
+            dismissable: dismissable,
+            sourceKey: sourceKey,
+            force: force
+        )
     }
 
     private func presentShare(for page: ScanResultsPageID) {

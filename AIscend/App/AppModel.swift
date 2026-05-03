@@ -776,6 +776,32 @@ final class AppModel {
         completedStepIDs.removeAll()
     }
 
+    func clearLocalAccountData() {
+        removeProfileAvatar()
+
+        [
+            Keys.hasCompletedOnboarding,
+            Keys.routineProfile,
+            Keys.completedStepIDs,
+            Keys.routineXP,
+            Keys.trackerState,
+            Keys.habitHistory,
+            Keys.lastRoutineDay
+        ].forEach { key in
+            defaults.removeObject(forKey: namespacedKey(key))
+        }
+
+        isRestoringPersistedState = true
+        hasCompletedOnboarding = false
+        profile = RoutineProfile()
+        completedStepIDs = []
+        routineXP = 0
+        trackerState = RoutineTrackerState()
+        habitHistoryByDay = [:]
+        lastRoutineDay = DailyCheckInStore.ymd(for: .now)
+        isRestoringPersistedState = false
+    }
+
     func adjustWaterIntake(by amount: Int) {
         refreshForCurrentDate()
         trackerState.waterIntake = max(0, trackerState.waterIntake + amount)
