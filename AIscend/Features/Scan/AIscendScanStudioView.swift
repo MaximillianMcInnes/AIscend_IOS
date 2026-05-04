@@ -41,8 +41,6 @@ struct AIscendScanStudioView: View {
     let badgeManager: BadgeManager
     let dailyCheckInStore: DailyCheckInStore
     let notificationManager: NotificationManager
-    var onOpenLatestResult: () -> Void = {}
-    var onBeginCapture: () -> Void = {}
     var onOpenChat: () -> Void = {}
     var onOpenRoutine: () -> Void = {}
 
@@ -84,18 +82,9 @@ struct AIscendScanStudioView: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                allowsPostResultActions: false,
                 onOpenScan: {
                     selectedArchivedScan = nil
-                    selectedTab = .newScan
-                    showScanFlow = true
-                },
-                onOpenRoutine: {
-                    selectedArchivedScan = nil
-                    onOpenRoutine()
-                },
-                onOpenChat: {
-                    selectedArchivedScan = nil
-                    onOpenChat()
                 },
                 onReturnHome: {
                     selectedArchivedScan = nil
@@ -129,10 +118,6 @@ struct AIscendScanStudioView: View {
                         id: resolvedID?.isEmpty == false ? resolvedID! : UUID().uuidString,
                         record: record
                     )
-                },
-                onStartNewScan: {
-                    selectedTab = .newScan
-                    showScanFlow = true
                 }
             )
         }
@@ -344,7 +329,6 @@ private struct AIscendPreviousScansStudioPage: View {
     let snapshot: DashboardSnapshot
     let session: AuthSessionStore
     let onOpenScanRecord: (PersistedScanRecord) -> Void
-    let onStartNewScan: () -> Void
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -354,8 +338,7 @@ private struct AIscendPreviousScansStudioPage: View {
                 AIscendPreviousScansTabView(
                     session: session,
                     embedded: true,
-                    onOpenScanRecord: onOpenScanRecord,
-                    onStartNewScan: onStartNewScan
+                    onOpenScanRecord: onOpenScanRecord
                 )
             }
             .padding(.horizontal, AIscendTheme.Spacing.screenInset)
@@ -458,14 +441,12 @@ private struct AIscendPreviousScansTabView: View {
     let session: AuthSessionStore
     var embedded: Bool = false
     let onOpenScanRecord: (PersistedScanRecord) -> Void
-    let onStartNewScan: () -> Void
 
     var body: some View {
         AIscendPreviousScansView(
             session: session,
             embedded: embedded,
-            onOpenScanRecord: onOpenScanRecord,
-            onStartNewScan: onStartNewScan
+            onOpenScanRecord: onOpenScanRecord
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scan-studio-previous-scans-root")

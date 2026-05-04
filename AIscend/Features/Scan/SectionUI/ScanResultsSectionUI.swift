@@ -36,54 +36,34 @@ struct ResultsSectionShell<Content: View>: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
-                    topChrome
-                    content
-                }
-                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-                .padding(.top, geometry.safeAreaInsets.top + AIscendTheme.Spacing.medium)
-                .padding(.bottom, 180)
+        ResultsFullscreenShell(
+            title: title,
+            subtitle: subtitle,
+            step: pageIndex + 1,
+            total: totalPages,
+            showsBottomCTA: false,
+            topRight: {
+                topRightChrome
+            },
+            bottomCTA: {
+                EmptyView()
+            },
+            content: {
+                content
             }
-        }
+        )
     }
 
-    private var topChrome: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            HStack {
-                AIscendBadge(
-                    title: badge ?? "Results",
-                    symbol: badge == "Premium" ? "sparkles.rectangle.stack.fill" : "lock.shield.fill",
-                    style: badge == "Premium" ? .accent : .neutral
-                )
-
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: AIscendTheme.Spacing.xSmall) {
-                    if let onShare {
-                        AIScendShareEntryButton(title: shareActionTitle ?? "Share", action: onShare)
-                    }
-
-                    Text("\(pageIndex + 1) / \(totalPages)")
-                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
-                        .padding(.horizontal, AIscendTheme.Spacing.small)
-                        .padding(.vertical, AIscendTheme.Spacing.xSmall)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.84))
-                        )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-                        )
-                }
+    private var topRightChrome: some View {
+        VStack(alignment: .trailing, spacing: AIscendTheme.Spacing.xSmall) {
+            if let onShare {
+                AIScendShareEntryButton(title: shareActionTitle ?? "Share", action: onShare)
             }
 
-            AIscendSectionHeader(
-                title: title,
-                subtitle: subtitle,
-                prominence: .hero
+            AIscendBadge(
+                title: badge ?? "Results",
+                symbol: badge == "Premium" ? "sparkles.rectangle.stack.fill" : "lock.shield.fill",
+                style: badge == "Premium" ? .accent : .neutral
             )
         }
     }

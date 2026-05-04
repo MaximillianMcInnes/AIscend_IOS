@@ -13,6 +13,7 @@ struct ScanResultsPageHost: View {
     @ObservedObject var dailyCheckInStore: DailyCheckInStore
     let onShare: (ScanResultsPageID) -> Void
     let onPresentPaywall: (PaywallVariant, Bool, String?, Bool) -> Void
+    let allowsPostResultActions: Bool
     let onOpenRoutine: () -> Void
     let onOpenChat: () -> Void
     let onOpenCheckIn: () -> Void
@@ -42,21 +43,23 @@ struct ScanResultsPageHost: View {
 
         case .harmony:
             HarmonyResultsPage(
-                pageIndex: pageIndex,
-                totalPages: viewModel.pageCount,
-                title: viewModel.title(for: .harmony),
-                subtitle: viewModel.subtitle(for: .harmony),
-                traits: viewModel.harmonyTraits(),
-                onShare: { onShare(.harmony) },
-                onContinue: viewModel.advance
+                face: viewModel.combinedSideProfile().merging(viewModel.combinedFrontProfile()) { _, front in front },
+                isPaid: viewModel.isPremium,
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                goNext: viewModel.advance,
+                onUpgrade: {
+                    onPresentPaywall(.deepReport, true, "harmony-premium", true)
+                }
             )
 
         case .eyes:
             EyesResultsPage(
-                viewModel: viewModel,
-                pageIndex: pageIndex,
-                onShare: { onShare(.eyes) },
-                onContinue: viewModel.advance,
+                face: viewModel.combinedFrontProfile(),
+                isPaid: viewModel.isPremium,
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                goNext: viewModel.advance,
                 onUpgrade: {
                     onPresentPaywall(.lockedInsight, true, "locked-eyes", false)
                 }
@@ -64,10 +67,11 @@ struct ScanResultsPageHost: View {
 
         case .lips:
             LipsResultsPage(
-                viewModel: viewModel,
-                pageIndex: pageIndex,
-                onShare: { onShare(.lips) },
-                onContinue: viewModel.advance,
+                face: viewModel.combinedFrontProfile(),
+                isPaid: viewModel.isPremium,
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                goNext: viewModel.advance,
                 onUpgrade: {
                     onPresentPaywall(.deepReport, true, "lips-premium", false)
                 }
@@ -75,10 +79,11 @@ struct ScanResultsPageHost: View {
 
         case .jaw:
             JawResultsPage(
-                viewModel: viewModel,
-                pageIndex: pageIndex,
-                onShare: { onShare(.jaw) },
-                onContinue: viewModel.advance,
+                face: viewModel.combinedFrontProfile(),
+                isPaid: viewModel.isPremium,
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                goNext: viewModel.advance,
                 onUpgrade: {
                     onPresentPaywall(.deepReport, true, "jaw-premium", true)
                 }
@@ -86,10 +91,14 @@ struct ScanResultsPageHost: View {
 
         case .sideProfile:
             SideProfileResultsPage(
-                viewModel: viewModel,
-                pageIndex: pageIndex,
-                onShare: { onShare(.sideProfile) },
-                onContinue: viewModel.advance,
+                nose: viewModel.combinedFrontProfile().merging(viewModel.combinedSideProfile()) { _, side in side },
+                harmony: viewModel.combinedFrontProfile().merging(viewModel.combinedSideProfile()) { _, side in side },
+                isPaid: viewModel.isPremium,
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                goNext: {
+                    viewModel.goToPage(0)
+                },
                 onUpgrade: {
                     onPresentPaywall(.deepReport, true, "side-premium", true)
                 }
@@ -116,7 +125,12 @@ struct ScanResultsPageHost: View {
                 isPremium: viewModel.isPremium,
                 cards: viewModel.completionCards,
                 primaryTitle: viewModel.primaryDoneTitle(),
+                allowsPostResultActions: allowsPostResultActions,
                 onPrimary: {
+                    guard allowsPostResultActions else {
+                        return
+                    }
+
                     if viewModel.isPremium {
                         badgeManager.recordGlowUpOpened()
                         onOpenRoutine()
@@ -125,6 +139,10 @@ struct ScanResultsPageHost: View {
                     }
                 },
                 onOpenChat: {
+                    guard allowsPostResultActions else {
+                        return
+                    }
+
                     badgeManager.recordAdvisorOpened()
                     onOpenChat()
                 },

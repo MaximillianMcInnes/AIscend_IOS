@@ -13,6 +13,7 @@ struct DoneResultsPage: View {
     let isPremium: Bool
     let cards: [ResultsCompletionCardModel]
     let primaryTitle: String
+    let allowsPostResultActions: Bool
     let onPrimary: () -> Void
     let onOpenChat: () -> Void
     let onOpenCheckIn: () -> Void
@@ -41,54 +42,56 @@ struct DoneResultsPage: View {
                 }
             }
 
-            DashboardGlassCard(tone: .premium) {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
-                    AIscendSectionHeader(
-                        eyebrow: "Accountability",
-                        title: checkedInToday ? "Today's check-in is protected" : "Start the daily accountability loop",
-                        subtitle: checkedInToday
-                            ? "Your streak stays intact. The consistency layer is already working in the background."
-                            : "Lock in the day, protect the streak, and give the result a reason to keep mattering tomorrow."
-                    )
-
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        PlacementBadge(
-                            title: "\(streakDays)d",
-                            detail: "Current streak"
+            if allowsPostResultActions {
+                DashboardGlassCard(tone: .premium) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                        AIscendSectionHeader(
+                            eyebrow: "Accountability",
+                            title: checkedInToday ? "Today's check-in is protected" : "Start the daily accountability loop",
+                            subtitle: checkedInToday
+                                ? "Your streak stays intact. The consistency layer is already working in the background."
+                                : "Lock in the day, protect the streak, and give the result a reason to keep mattering tomorrow."
                         )
-                        PlacementBadge(
-                            title: "\(badgeCount)",
-                            detail: "Badges unlocked"
-                        )
-                    }
 
-                    Button(action: onOpenCheckIn) {
-                        AIscendButtonLabel(
-                            title: checkedInToday ? "Review Daily Check-In" : "Start Daily Check-In",
-                            leadingSymbol: "calendar.badge.checkmark"
-                        )
-                    }
-                    .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                        HStack(spacing: AIscendTheme.Spacing.small) {
+                            PlacementBadge(
+                                title: "\(streakDays)d",
+                                detail: "Current streak"
+                            )
+                            PlacementBadge(
+                                title: "\(badgeCount)",
+                                detail: "Badges unlocked"
+                            )
+                        }
 
-                    Button(action: onOpenStreakHub) {
-                        AIscendButtonLabel(title: "Open Consistency Hub", leadingSymbol: "flame.fill")
+                        Button(action: onOpenCheckIn) {
+                            AIscendButtonLabel(
+                                title: checkedInToday ? "Review Daily Check-In" : "Start Daily Check-In",
+                                leadingSymbol: "calendar.badge.checkmark"
+                            )
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
+
+                        Button(action: onOpenStreakHub) {
+                            AIscendButtonLabel(title: "Open Consistency Hub", leadingSymbol: "flame.fill")
+                        }
+                        .buttonStyle(AIscendButtonStyle(variant: .ghost))
                     }
-                    .buttonStyle(AIscendButtonStyle(variant: .ghost))
                 }
-            }
 
-            Button(action: onPrimary) {
-                AIscendButtonLabel(title: primaryTitle, leadingSymbol: isPremium ? "scope" : "crown.fill")
-            }
-            .buttonStyle(AIscendButtonStyle(variant: .primary))
+                Button(action: onPrimary) {
+                    AIscendButtonLabel(title: primaryTitle, leadingSymbol: isPremium ? "scope" : "crown.fill")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
 
-            Button(action: onOpenChat) {
-                AIscendButtonLabel(title: "Ask Advisor To Explain", leadingSymbol: "message.fill")
+                Button(action: onOpenChat) {
+                    AIscendButtonLabel(title: "Ask Advisor To Explain", leadingSymbol: "message.fill")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .secondary))
             }
-            .buttonStyle(AIscendButtonStyle(variant: .secondary))
 
             Button(action: onReturnHome) {
-                AIscendButtonLabel(title: isPremium ? "Back to Dashboard" : "Maybe Later", leadingSymbol: "house.fill")
+                AIscendButtonLabel(title: allowsPostResultActions ? (isPremium ? "Back to Dashboard" : "Maybe Later") : "Close", leadingSymbol: "xmark")
             }
             .buttonStyle(AIscendButtonStyle(variant: .ghost))
         }

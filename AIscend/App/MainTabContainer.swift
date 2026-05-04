@@ -312,8 +312,6 @@ struct MainTabContainer: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
-                onOpenLatestResult: { showingScanResults = true },
-                onBeginCapture: { showingScanCapture = true },
                 onOpenChat: { select(.chat) },
                 onOpenRoutine: { select(.routine) }
             )

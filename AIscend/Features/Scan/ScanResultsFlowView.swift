@@ -14,6 +14,7 @@ struct ScanResultsFlowView: View {
     let onOpenChat: () -> Void
     let onReturnHome: () -> Void
     let onDismiss: () -> Void
+    let allowsPostResultActions: Bool
 
     @ObservedObject private var badgeManager: BadgeManager
     @ObservedObject private var dailyCheckInStore: DailyCheckInStore
@@ -32,6 +33,7 @@ struct ScanResultsFlowView: View {
         dailyCheckInStore: DailyCheckInStore,
         notificationManager: NotificationManager,
         repository: ScanResultsRepositoryProtocol = ScanResultsRepository(),
+        allowsPostResultActions: Bool = true,
         onOpenScan: @escaping () -> Void = {},
         onOpenRoutine: @escaping () -> Void = {},
         onOpenChat: @escaping () -> Void = {},
@@ -44,6 +46,7 @@ struct ScanResultsFlowView: View {
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
         self.onDismiss = onDismiss
+        self.allowsPostResultActions = allowsPostResultActions
         self._badgeManager = ObservedObject(wrappedValue: badgeManager)
         self._dailyCheckInStore = ObservedObject(wrappedValue: dailyCheckInStore)
         self._notificationManager = ObservedObject(wrappedValue: notificationManager)
@@ -81,34 +84,8 @@ struct ScanResultsFlowView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $showingDailyCheckIn) {
-            DailyCheckInView(
-                dailyCheckInStore: dailyCheckInStore,
-                badgeManager: badgeManager,
-                notificationManager: notificationManager,
-                isPremium: viewModel.isPremium,
-                onComplete: {},
-                onDismiss: { showingDailyCheckIn = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingStreakHub) {
-            StreakHubView(
-                dailyCheckInStore: dailyCheckInStore,
-                badgeManager: badgeManager,
-                notificationManager: notificationManager,
-                onOpenCheckIn: {
-                    showingStreakHub = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                        showingDailyCheckIn = true
-                    }
-                },
-                onDismiss: { showingStreakHub = false }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
+        .sheet(isPresented: $showingDailyCheckIn, content: dailyCheckInSheet)
+        .sheet(isPresented: $showingStreakHub, content: streakHubSheet)
         .fullScreenCover(item: $paywallCoordinator.activePresentation) { presentation in
             PaywallView(
                 presentation: presentation,
@@ -121,14 +98,14 @@ struct ScanResultsFlowView: View {
             await viewModel.load(initialResult: initialResult)
             await notificationManager.refreshAuthorizationStatus()
 
-            if let result = viewModel.result {
+            if allowsPostResultActions, let result = viewModel.result {
                 badgeManager.recordResultsViewed(accessLevel: result.accessLevel)
             }
         }
         .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
             viewModel.handlePageChange(from: oldValue, to: newValue)
 
-            if !viewModel.isPremium, viewModel.currentPageID == .premiumPush {
+            if allowsPostResultActions, !viewModel.isPremium, viewModel.currentPageID == .premiumPush {
                 paywallCoordinator.present(
                     .rewardLoop,
                     dismissable: true,
@@ -140,16 +117,18 @@ struct ScanResultsFlowView: View {
             GeometryReader { geometry in
                 VStack {
                     HStack {
-                        Button {
-                            showingStreakHub = true
-                        } label: {
-                            ResultsMomentumCapsule(
-                                streakDays: dailyCheckInStore.snapshot.currentStreak,
-                                badgeCount: badgeManager.earnedBadges.count,
-                                checkedInToday: dailyCheckInStore.hasCheckedInToday
-                            )
+                        if allowsPostResultActions {
+                            Button {
+                                showingStreakHub = true
+                            } label: {
+                                ResultsMomentumCapsule(
+                                    streakDays: dailyCheckInStore.snapshot.currentStreak,
+                                    badgeCount: badgeManager.earnedBadges.count,
+                                    checkedInToday: dailyCheckInStore.hasCheckedInToday
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
 
                         Spacer(minLength: AIscendTheme.Spacing.small)
 
@@ -164,7 +143,7 @@ struct ScanResultsFlowView: View {
             .allowsHitTesting(true)
         }
         .overlay(alignment: .top) {
-            if let badge = badgeManager.latestUnlockedBadge {
+            if allowsPostResultActions, let badge = badgeManager.latestUnlockedBadge {
                 ResultsBadgeUnlockBanner(badge: badge)
                     .padding(.top, 106)
                     .padding(.horizontal, AIscendTheme.Spacing.screenInset)
@@ -206,10 +185,17 @@ struct ScanResultsFlowView: View {
                             force: force
                         )
                     },
+                    allowsPostResultActions: allowsPostResultActions,
                     onOpenRoutine: onOpenRoutine,
                     onOpenChat: onOpenChat,
-                    onOpenCheckIn: { showingDailyCheckIn = true },
-                    onOpenStreakHub: { showingStreakHub = true },
+                    onOpenCheckIn: {
+                        guard allowsPostResultActions else { return }
+                        showingDailyCheckIn = true
+                    },
+                    onOpenStreakHub: {
+                        guard allowsPostResultActions else { return }
+                        showingStreakHub = true
+                    },
                     onReturnHome: onReturnHome
                 )
                     .tag(index)
@@ -239,6 +225,11 @@ struct ScanResultsFlowView: View {
     }
 
     private func handlePaywallPrimary() {
+        guard allowsPostResultActions else {
+            paywallCoordinator.dismiss()
+            return
+        }
+
         paywallCoordinator.dismiss()
 
         Task { @MainActor in
@@ -253,6 +244,10 @@ struct ScanResultsFlowView: View {
         sourceKey: String?,
         force: Bool
     ) {
+        guard allowsPostResultActions else {
+            return
+        }
+
         paywallCoordinator.present(
             variant,
             dismissable: dismissable,
@@ -268,6 +263,42 @@ struct ScanResultsFlowView: View {
 
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
         shareCoordinator.present(payload)
+    }
+
+    @ViewBuilder
+    private func dailyCheckInSheet() -> some View {
+        if allowsPostResultActions {
+            DailyCheckInView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                isPremium: viewModel.isPremium,
+                onComplete: {},
+                onDismiss: { showingDailyCheckIn = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+    }
+
+    @ViewBuilder
+    private func streakHubSheet() -> some View {
+        if allowsPostResultActions {
+            StreakHubView(
+                dailyCheckInStore: dailyCheckInStore,
+                badgeManager: badgeManager,
+                notificationManager: notificationManager,
+                onOpenCheckIn: {
+                    showingStreakHub = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                        showingDailyCheckIn = true
+                    }
+                },
+                onDismiss: { showingStreakHub = false }
+            )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
     }
 }
 
