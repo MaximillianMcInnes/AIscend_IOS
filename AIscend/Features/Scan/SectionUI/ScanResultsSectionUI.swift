@@ -5,6 +5,10 @@
 
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#endif
+
 struct ResultsSectionShell<Content: View>: View {
     let pageIndex: Int
     let totalPages: Int
@@ -178,56 +182,38 @@ struct ResultsSyncCapsule: View {
 }
 
 struct ResultsPhotoStrip: View {
-    let frontURL: URL?
-    let sideURL: URL?
+    let frontRawValue: String?
+    let sideRawValue: String?
 
     var body: some View {
         HStack(spacing: AIscendTheme.Spacing.small) {
             ResultsPhotoCard(
                 title: "Front",
-                url: frontURL,
-                prominence: .primary
+                rawValue: frontRawValue
             )
 
             ResultsPhotoCard(
                 title: "Profile",
-                url: sideURL,
-                prominence: .secondary
+                rawValue: sideRawValue
             )
         }
     }
 }
 
 struct ResultsPhotoCard: View {
-    enum Prominence {
-        case primary
-        case secondary
-    }
-
     let title: String
-    let url: URL?
-    let prominence: Prominence
+    let rawValue: String?
+
+    private var source: ScanPhotoSource {
+        ScanPhotoSource(rawValue: rawValue)
+    }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color(hex: "12161D"))
 
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        ResultsPhotoPlaceholder()
-                    }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-            } else {
-                ResultsPhotoPlaceholder()
-            }
+            photoContent
 
             LinearGradient(
                 colors: [
@@ -244,11 +230,48 @@ struct ResultsPhotoCard: View {
                 .padding(AIscendTheme.Spacing.medium)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: prominence == .primary ? 250 : 210)
+        .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(AIscendTheme.Colors.borderStrong, lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var photoContent: some View {
+        #if canImport(UIKit)
+        if let localImage = source.localURL.flatMap({ UIImage(contentsOfFile: $0.path) }) {
+            Image(uiImage: localImage)
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let remoteURL = source.remoteURL {
+            remoteImage(remoteURL)
+        } else {
+            ResultsPhotoPlaceholder()
+        }
+        #else
+        if let remoteURL = source.remoteURL {
+            remoteImage(remoteURL)
+        } else {
+            ResultsPhotoPlaceholder()
+        }
+        #endif
+    }
+
+    private func remoteImage(_ url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            default:
+                ResultsPhotoPlaceholder()
+            }
+        }
     }
 }
 
@@ -268,6 +291,7 @@ struct ResultsPhotoPlaceholder: View {
                 .frame(width: 120, height: 120)
                 .blur(radius: 18)
         )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

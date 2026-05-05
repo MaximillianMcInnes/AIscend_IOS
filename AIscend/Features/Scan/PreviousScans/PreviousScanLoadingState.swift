@@ -31,10 +31,12 @@ private struct PreviousScanLoadingCard: View {
 
             HStack(spacing: AIscendTheme.Spacing.small) {
                 PreviousScanShimmerBlock(cornerRadius: 24)
-                    .frame(height: 184)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
 
                 PreviousScanShimmerBlock(cornerRadius: 24)
-                    .frame(height: 184)
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
             }
 
             PreviousScanShimmerBlock(cornerRadius: 12)

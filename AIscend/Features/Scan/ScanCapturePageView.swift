@@ -56,14 +56,12 @@ struct ScanCapturePageView: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                                     .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.52))
-                                    .frame(height: 320)
 
                                 if let image {
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(height: 320)
-                                        .frame(maxWidth: .infinity)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                                         .clipped()
                                         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                             } else {
@@ -89,6 +87,8 @@ struct ScanCapturePageView: View {
                                         .tint(AIscendTheme.Colors.accentGlow)
                                 }
                             }
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                                     .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
@@ -226,8 +226,16 @@ struct ScanCapturePageView: View {
 
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
-                  let image = UIImage(data: data),
-                  let compressed = image.jpegData(compressionQuality: 0.88) else {
+                  let image = UIImage(data: data)
+            else {
+                await MainActor.run {
+                    isLoading = false
+                }
+                return
+            }
+
+            let scanImage = image.aiscendCroppedToScanPortrait()
+            guard let compressed = scanImage.jpegData(compressionQuality: 0.88) else {
                 await MainActor.run {
                     isLoading = false
                 }
@@ -235,7 +243,7 @@ struct ScanCapturePageView: View {
             }
 
             await MainActor.run {
-                finishImport(image: image, data: compressed)
+                finishImport(image: scanImage, data: compressed)
             }
         } catch {
             await MainActor.run {
@@ -273,12 +281,13 @@ struct ScanCapturePageView: View {
     private func importCapturedPhoto(_ image: UIImage) {
         isLoading = true
 
-        guard let compressed = image.jpegData(compressionQuality: 0.88) else {
+        let scanImage = image.aiscendCroppedToScanPortrait()
+        guard let compressed = scanImage.jpegData(compressionQuality: 0.88) else {
             isLoading = false
             return
         }
 
-        finishImport(image: image, data: compressed)
+        finishImport(image: scanImage, data: compressed)
     }
 
     private func finishImport(image: UIImage, data: Data) {

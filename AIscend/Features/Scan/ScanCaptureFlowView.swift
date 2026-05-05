@@ -168,6 +168,7 @@ struct ScanCaptureFlowView: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipShape(
                             RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                         )
@@ -182,7 +183,8 @@ struct ScanCaptureFlowView: View {
                     }
                 }
             }
-            .frame(height: 220)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
             .overlay(
                 RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
                     .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
@@ -208,8 +210,9 @@ struct ScanCaptureFlowView: View {
                 return
             }
 
+            let scanImage = image.aiscendCroppedToScanPortrait()
             await MainActor.run {
-                completion(image)
+                completion(scanImage)
             }
         }
     }

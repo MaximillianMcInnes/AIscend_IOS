@@ -313,8 +313,8 @@ private struct PreviousScanCardPhotoTile: View {
 
     @State private var didRevealImage = false
 
-    private var source: PreviousScanCardImageSource {
-        PreviousScanCardImageSource(rawValue: rawValue)
+    private var source: ScanPhotoSource {
+        ScanPhotoSource(rawValue: rawValue)
     }
 
     var body: some View {
@@ -336,8 +336,8 @@ private struct PreviousScanCardPhotoTile: View {
                 .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
                 .padding(AIscendTheme.Spacing.medium)
         }
-        .aspectRatio(3.0 / 4.0, contentMode: .fit)
         .frame(maxWidth: .infinity)
+        .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
         .clipShape(tileShape)
         .overlay(tileShape.stroke(Color.white.opacity(0.10), lineWidth: 1))
         .shadow(color: Color.black.opacity(0.24), radius: 16, x: 0, y: 10)
@@ -410,6 +410,7 @@ private struct PreviousScanCardPhotoTile: View {
                     .foregroundStyle(AIscendTheme.Colors.textMuted)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var tileShape: RoundedRectangle {
@@ -493,93 +494,5 @@ private struct PreviousScanCardShimmer: View {
                     shimmerX = 1.2
                 }
             }
-    }
-}
-
-private struct PreviousScanCardImageSource {
-    let localURL: URL?
-    let remoteURL: URL?
-
-    init(rawValue: String?) {
-        let trimmedValue = Self.trimmed(rawValue)
-        localURL = Self.resolveLocalURL(from: trimmedValue)
-        remoteURL = Self.resolveRemoteURL(from: trimmedValue)
-    }
-
-    private static func trimmed(_ rawValue: String?) -> String? {
-        let value = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value : nil
-    }
-
-    private static func resolveLocalURL(from rawValue: String?) -> URL? {
-        guard let rawValue else {
-            return nil
-        }
-
-        return candidateLocalURLs(for: rawValue)
-            .first(where: { FileManager.default.fileExists(atPath: $0.path) })
-    }
-
-    private static func candidateLocalURLs(for rawValue: String) -> [URL] {
-        var candidates: [URL] = []
-
-        if rawValue.hasPrefix("/") {
-            candidates.append(URL(fileURLWithPath: rawValue))
-        }
-
-        if let directURL = URL(string: rawValue), directURL.isFileURL {
-            candidates.append(directURL)
-        }
-
-        if let decodedValue = rawValue.removingPercentEncoding {
-            if decodedValue.hasPrefix("/") {
-                candidates.append(URL(fileURLWithPath: decodedValue))
-            }
-
-            if let decodedURL = URL(string: decodedValue), decodedURL.isFileURL {
-                candidates.append(decodedURL)
-            }
-        }
-
-        if !rawValue.contains("://"), !rawValue.hasPrefix("/") {
-            let directories = [
-                FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first,
-                FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first,
-                FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first,
-                FileManager.default.temporaryDirectory
-            ].compactMap { $0 }
-
-            for directory in directories {
-                candidates.append(directory.appendingPathComponent(rawValue))
-                candidates.append(directory.appendingPathComponent("ScanCaptures", isDirectory: true).appendingPathComponent(rawValue))
-            }
-        }
-
-        return candidates
-    }
-
-    private static func resolveRemoteURL(from rawValue: String?) -> URL? {
-        guard let rawValue else {
-            return nil
-        }
-
-        let candidates = [
-            rawValue,
-            rawValue.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-            rawValue.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed)
-        ]
-
-        for candidate in candidates.compactMap({ $0 }) {
-            guard let url = URL(string: candidate),
-                  let scheme = url.scheme?.lowercased(),
-                  scheme == "http" || scheme == "https"
-            else {
-                continue
-            }
-
-            return url
-        }
-
-        return nil
     }
 }

@@ -11,6 +11,7 @@
 		82B6F7682F85410000B0974B /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 82B6F76C2F85410000B0974B /* FirebaseAuth */; };
 		82B6F7692F85410000B0974B /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 82B6F76D2F85410000B0974B /* GoogleSignIn */; };
 		82C0A1012F86000100B0974B /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 82C0A1022F86000100B0974B /* FirebaseFirestore */; };
+		82C0A1032F86012000B0974B /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 82C0A1052F86012000B0974B /* SuperwallKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +64,7 @@
 				82B6F7682F85410000B0974B /* FirebaseAuth in Frameworks */,
 				82B6F7692F85410000B0974B /* GoogleSignIn in Frameworks */,
 				82C0A1012F86000100B0974B /* FirebaseFirestore in Frameworks */,
+				82C0A1032F86012000B0974B /* SuperwallKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -128,6 +130,7 @@
 				82B6F76C2F85410000B0974B /* FirebaseAuth */,
 				82B6F76D2F85410000B0974B /* GoogleSignIn */,
 				82C0A1022F86000100B0974B /* FirebaseFirestore */,
+				82C0A1052F86012000B0974B /* SuperwallKit */,
 			);
 			productName = AIscend;
 			productReference = 82B6F7372F85246100B0974B /* AIscend.app */;
@@ -214,6 +217,7 @@
 			packageReferences = (
 				82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				82B6F76B2F85410000B0974B /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				82C0A1042F86012000B0974B /* XCRemoteSwiftPackageReference "Superwall-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 82B6F7382F85246100B0974B /* Products */;
@@ -664,6 +668,14 @@
 				minimumVersion = 8.0.0;
 			};
 		};
+		82C0A1042F86012000B0974B /* XCRemoteSwiftPackageReference "Superwall-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/superwall/Superwall-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -686,6 +698,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		82C0A1052F86012000B0974B /* SuperwallKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 82C0A1042F86012000B0974B /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
+			productName = SuperwallKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
