@@ -1,5 +1,10 @@
 .DS_Store
 **/.DS_Store
+.env.local
+.env.*.local
+web/.env
+web/.env.local
+web/.env.*.local
 
 BuildArtifacts/
 build/

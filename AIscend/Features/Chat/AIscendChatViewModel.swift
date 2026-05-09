@@ -315,7 +315,7 @@ final class AIscendChatViewModel {
     }
 
     func presentPremiumUpsell() {
-        isPremiumUpsellPresented = true
+        isPremiumUpsellPresented = false
     }
 
     func dismissPremiumUpsell() {

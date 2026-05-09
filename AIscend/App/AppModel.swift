@@ -338,6 +338,7 @@ final class AppModel {
     }
 
     private enum GlobalKeys {
+        static let hasCompletedEntryIntro = "hasCompletedEntryIntro"
         static let hasCompletedEntryOnboarding = "hasCompletedEntryOnboarding"
         static let analysisGoals = "analysisGoals"
     }
@@ -361,6 +362,16 @@ final class AppModel {
             }
 
             defaults.set(lastRoutineDay, forKey: namespacedKey(Keys.lastRoutineDay))
+        }
+    }
+
+    var hasCompletedEntryIntro: Bool {
+        didSet {
+            guard !isRestoringPersistedState else {
+                return
+            }
+
+            defaults.set(hasCompletedEntryIntro, forKey: GlobalKeys.hasCompletedEntryIntro)
         }
     }
 
@@ -453,6 +464,7 @@ final class AppModel {
         storageNamespace = initialNamespace
 
         if arguments.contains("--uitest-reset-onboarding") {
+            defaults.removeObject(forKey: GlobalKeys.hasCompletedEntryIntro)
             defaults.removeObject(forKey: GlobalKeys.hasCompletedEntryOnboarding)
             defaults.removeObject(forKey: GlobalKeys.analysisGoals)
             defaults.removeObject(forKey: Keys.hasCompletedOnboarding)
@@ -463,6 +475,7 @@ final class AppModel {
             defaults.removeObject(forKey: Self.namespacedKey(Keys.trackerState, namespace: initialNamespace))
         }
 
+        hasCompletedEntryIntro = false
         hasCompletedEntryOnboarding = false
         analysisGoals = AnalysisGoal.defaultSelection
         hasCompletedOnboarding = false
@@ -471,11 +484,17 @@ final class AppModel {
         restoreGlobalState()
         restorePersistedState()
 
+        if arguments.contains("--uitest-complete-entry-intro") {
+            hasCompletedEntryIntro = true
+        }
+
         if arguments.contains("--uitest-complete-entry-onboarding") {
+            hasCompletedEntryIntro = true
             hasCompletedEntryOnboarding = true
         }
 
         if arguments.contains("--uitest-complete-onboarding") {
+            hasCompletedEntryIntro = true
             hasCompletedEntryOnboarding = true
             hasCompletedOnboarding = true
         }
@@ -742,12 +761,23 @@ final class AppModel {
     }
 
     func completeOnboardingExperience() {
+        hasCompletedEntryIntro = true
         hasCompletedEntryOnboarding = true
         completeOnboarding()
     }
 
+    func completeEntryIntro() {
+        hasCompletedEntryIntro = true
+    }
+
     func completeEntryOnboarding() {
+        hasCompletedEntryIntro = true
         hasCompletedEntryOnboarding = true
+    }
+
+    func resetEntryIntro() {
+        hasCompletedEntryIntro = false
+        hasCompletedEntryOnboarding = false
     }
 
     func applyAuthenticatedUserID(_ userID: String?) {
@@ -764,6 +794,7 @@ final class AppModel {
 
     func resetOnboarding() {
         hasCompletedOnboarding = false
+        hasCompletedEntryIntro = false
         hasCompletedEntryOnboarding = false
         completedStepIDs.removeAll()
     }
@@ -959,6 +990,12 @@ final class AppModel {
     private func restoreGlobalState() {
         isRestoringPersistedState = true
         defer { isRestoringPersistedState = false }
+
+        if defaults.object(forKey: GlobalKeys.hasCompletedEntryIntro) != nil {
+            hasCompletedEntryIntro = defaults.bool(forKey: GlobalKeys.hasCompletedEntryIntro)
+        } else {
+            hasCompletedEntryIntro = false
+        }
 
         if defaults.object(forKey: GlobalKeys.hasCompletedEntryOnboarding) != nil {
             hasCompletedEntryOnboarding = defaults.bool(forKey: GlobalKeys.hasCompletedEntryOnboarding)

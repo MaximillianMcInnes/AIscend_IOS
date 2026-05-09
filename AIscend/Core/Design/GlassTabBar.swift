@@ -33,6 +33,10 @@ struct GlassTabBar: View {
         .padding(.horizontal, AIscendTheme.Spacing.screenInset)
         .padding(.top, 6)
         .padding(.bottom, max(bottomInset, 0))
+        .animation(
+            usesQuickFadeSelection ? .easeOut(duration: 0.18) : .spring(response: 0.34, dampingFraction: 0.86),
+            value: selectedTab
+        )
     }
 
     private var tabBarBackground: some View {

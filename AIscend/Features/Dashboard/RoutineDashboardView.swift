@@ -17,6 +17,7 @@ struct RoutineDashboardView: View {
     @ObservedObject var hydrationStore: HydrationTrackingStore
     @ObservedObject var electrolyteStore: ElectrolyteTrackingStore
     @ObservedObject var badgeManager: BadgeManager
+    @StateObject private var scanTrendStore = DashboardScanTrendStore()
     var onOpenAdvisor: () -> Void = {}
     var onOpenHydrationChat: (String) -> Void = { _ in }
     var onOpenRoutine: () -> Void = {}
@@ -24,6 +25,8 @@ struct RoutineDashboardView: View {
     var onOpenConsistency: () -> Void = {}
     var onOpenDailyPhoto: () -> Void = {}
     var onCaptureDailyPhoto: () -> Void = {}
+    var onOpenGlowUpTracker: () -> Void = {}
+    var onOpenRoadmap: () -> Void = {}
     var onOpenScan: () -> Void = {}
     var onOpenAccount: () -> Void = {}
     var onRefine: () -> Void = {}
@@ -92,10 +95,6 @@ struct RoutineDashboardView: View {
         min(snapshot.score + max(3, Int(snapshot.delta.rounded())), 99)
     }
 
-    private var cohortHeadline: String {
-        "Ahead of \(max(1, 100 - snapshot.percentile))% of current reads"
-    }
-
     private var featuredDailyPhotoEntry: DailyPhotoEntry? {
         dailyPhotoStore.todayEntry ?? dailyPhotoStore.recentEntries(limit: 1).first
     }
@@ -161,6 +160,9 @@ struct RoutineDashboardView: View {
                 }
             )
         }
+        .task(id: session.user?.id) {
+            await scanTrendStore.loadScans(for: session.user)
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -184,9 +186,10 @@ struct RoutineDashboardView: View {
                     reportScoreRow
                     optimizationBanner
 
-                    ChartSection(snapshot: snapshot)
+                    ChartSection(snapshot: snapshot, trendPhase: scanTrendStore.phase)
 
-                    cohortBanner
+                    roadmapWidget
+                    glowUpTrackerWidget
                     dailyPhotosAccessWidget
 
                     HydrationSection(
@@ -389,46 +392,143 @@ struct RoutineDashboardView: View {
         )
     }
 
-    private var cohortBanner: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                Text(cohortHeadline)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+    private var glowUpTrackerWidget: some View {
+        DashboardGlassCard(tone: .premium) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendBadge(
+                            title: "What changed engine",
+                            symbol: "chart.xyaxis.line",
+                            style: .accent
+                        )
 
-                Spacer(minLength: 0)
+                        Text("Glow-Up Tracker")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
-                Image(systemName: "globe.americas.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                        Text("Compare scans over time, review metric movement, and keep your progress archive private by default.")
+                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    AIscendIconOrb(symbol: "sparkles.rectangle.stack.fill", accent: .sky, size: 54)
+                }
+
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    glowUpMetaPill(title: "Archive", value: "Timeline", symbol: "rectangle.stack.fill")
+                    glowUpMetaPill(title: "Signal", value: "Deltas", symbol: "plus.forwardslash.minus")
+                }
+
+                Button(action: onOpenGlowUpTracker) {
+                    AIscendButtonLabel(
+                        title: "Open Glow-Up Tracker",
+                        leadingSymbol: "chart.line.uptrend.xyaxis"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
             }
+        }
+    }
 
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                Text(cohortHeadline)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+    private var roadmapWidget: some View {
+        DashboardGlassCard(tone: .premium) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        AIscendBadge(
+                            title: "30 / 60 / 90 system",
+                            symbol: "map.fill",
+                            style: .accent
+                        )
 
-                Image(systemName: "globe.americas.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                        Text("AI Roadmap")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                        Text("Turn scan signals and goals into a focused 90-day optimisation path for grooming, recovery, posture, hydration, and presentation.")
+                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    AIscendIconOrb(symbol: "point.topleft.down.curvedto.point.bottomright.up", accent: .sky, size: 54)
+                }
+
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    roadmapMetaPill(title: "Plan", value: "90 days", symbol: "calendar")
+                    roadmapMetaPill(title: "Focus", value: "Top 5", symbol: "target")
+                }
+
+                Button(action: onOpenRoadmap) {
+                    AIscendButtonLabel(
+                        title: "Open AI Roadmap",
+                        leadingSymbol: "map.fill"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
+            }
+        }
+    }
+
+    private func roadmapMetaPill(title: String, value: String, symbol: String) -> some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Text(value)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, AIscendTheme.Spacing.large)
-        .padding(.vertical, AIscendTheme.Spacing.mediumLarge)
+        .padding(AIscendTheme.Spacing.medium)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.58))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+
+    private func glowUpMetaPill(title: String, value: String, symbol: String) -> some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Text(value)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.58))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
 
     private var dailyPhotosAccessWidget: some View {
         DashboardGlassCard(tone: .hero) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
                 HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
                         AIscendBadge(
@@ -438,14 +538,17 @@ struct RoutineDashboardView: View {
                         )
 
                         Text("Today's photo")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(size: 26, weight: .bold, design: .rounded))
                             .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
                         Text(dailyPhotoHeadline)
-                            .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
+                            .font(.system(size: 19, weight: .semibold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         Text(dailyPhotoDetail)
-                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
+                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer(minLength: 0)
@@ -463,7 +566,7 @@ struct RoutineDashboardView: View {
 
                         VStack(spacing: AIscendTheme.Spacing.small) {
                             DailyPhotosWidgetMetaPill(
-                                title: "Archive",
+                                title: "Saved",
                                 value: dailyPhotoArchiveLabel,
                                 symbol: "photo.stack.fill"
                             )
@@ -490,7 +593,7 @@ struct RoutineDashboardView: View {
 
                         HStack(spacing: AIscendTheme.Spacing.small) {
                             DailyPhotosWidgetMetaPill(
-                                title: "Archive",
+                                title: "Saved",
                                 value: dailyPhotoArchiveLabel,
                                 symbol: "photo.stack.fill"
                             )
@@ -610,10 +713,10 @@ private struct DailyPhotosWidgetMetaPill: View {
             ZStack {
                 Circle()
                     .fill(AIscendTheme.Colors.surfaceInteractive.opacity(0.86))
-                    .frame(width: 34, height: 34)
+                    .frame(width: 30, height: 30)
 
                 Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(AIscendTheme.Colors.accentGlow)
             }
 
@@ -627,14 +730,14 @@ private struct DailyPhotosWidgetMetaPill: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, AIscendTheme.Spacing.medium)
-        .padding(.vertical, AIscendTheme.Spacing.medium)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, AIscendTheme.Spacing.small)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.82))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
@@ -646,7 +749,7 @@ private struct DailyPhotosWidgetPreviewCard: View {
     let isTodayCaptured: Bool
 
     private var surfaceShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 26, style: .continuous)
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
     }
 
     private var previewLabel: String {
@@ -699,27 +802,14 @@ private struct DailyPhotosWidgetPreviewCard: View {
                     )
                 )
 
-            if let entry,
-               let url = store.imageURL(for: entry),
-               let image = UIImage(contentsOfFile: url.path)
-            {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if let entry, let url = store.imageURL(for: entry) {
+                AIscendCachedImage(localURL: url, maxPixelDimension: 900) {
+                    placeholderContent
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             } else {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                    AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 54)
-
-                    Text("No photo yet")
-                        .aiscendTextStyle(.cardTitle)
-
-                    Text("The first capture turns this panel into your daily visual check-in.")
-                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-                }
-                .padding(AIscendTheme.Spacing.large)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                placeholderContent
             }
 
             LinearGradient(
@@ -736,21 +826,36 @@ private struct DailyPhotosWidgetPreviewCard: View {
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
 
                 Text(title)
-                    .aiscendTextStyle(.sectionTitle)
+                    .font(.system(size: 21, weight: .bold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
 
                 Text(detail)
                     .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
             }
-            .padding(AIscendTheme.Spacing.large)
+            .padding(AIscendTheme.Spacing.mediumLarge)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 208)
+        .frame(height: 176)
         .clipShape(surfaceShape)
         .overlay(
             surfaceShape
                 .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
+    }
+
+    private var placeholderContent: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+            AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 48)
+
+            Text("No photo yet")
+                .aiscendTextStyle(.cardTitle)
+
+            Text("The first capture turns this panel into your daily visual check-in.")
+                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+        }
+        .padding(AIscendTheme.Spacing.mediumLarge)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

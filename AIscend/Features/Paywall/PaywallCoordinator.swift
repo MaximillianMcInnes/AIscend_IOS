@@ -129,18 +129,9 @@ final class PaywallCoordinator: ObservableObject {
         sourceKey: String? = nil,
         force: Bool = false
     ) {
-        if let sourceKey, !force, shownKeys.contains(sourceKey) {
-            return
-        }
-
         if let sourceKey {
             shownKeys.insert(sourceKey)
         }
-
-        activePresentation = PaywallPresentation(
-            variant: variant,
-            isDismissable: dismissable
-        )
     }
 
     func dismiss() {

@@ -26,6 +26,8 @@ final class ScanResultsViewModel: ObservableObject {
     private let session: AuthSessionStore
     private let repository: ScanResultsRepositoryProtocol
     private var hasLoaded = false
+    private var harmonyTraitsCache: [ScanTraitRowModel]?
+    private var sectionTraitsCache: [ScanResultsPageID: [ScanTraitRowModel]] = [:]
 
     init(
         session: AuthSessionStore,
@@ -153,6 +155,7 @@ final class ScanResultsViewModel: ObservableObject {
         guard let resolvedResult, resolvedResult.isDisplayable else {
             result = nil
             pages = []
+            resetDerivedCaches()
             loadState = .empty
             hasLoaded = true
             return
@@ -160,6 +163,7 @@ final class ScanResultsViewModel: ObservableObject {
 
         result = resolvedResult
         pages = resolvedResult.pageSequence
+        resetDerivedCaches()
         loadState = .ready
 
         if resolvedResult.isFreshScanCandidate {
@@ -173,6 +177,7 @@ final class ScanResultsViewModel: ObservableObject {
 
         result = autoSave.result
         pages = autoSave.result.pageSequence
+        resetDerivedCaches()
         autoSaveState = autoSave.state
         loadState = .ready
         hasLoaded = true
@@ -268,18 +273,25 @@ final class ScanResultsViewModel: ObservableObject {
     }
 
     func harmonyTraits() -> [ScanTraitRowModel] {
+        if let harmonyTraitsCache {
+            return harmonyTraitsCache
+        }
+
+        let rows: [ScanTraitRowModel]
         if let matched = traits(
             keywords: ["harmony", "symmetry", "balance", "proportion", "ratio", "alignment"],
             in: combinedFrontProfile()
         ), !matched.isEmpty {
-            return Array(matched.prefix(4))
+            rows = Array(matched.prefix(4))
+            harmonyTraitsCache = rows
+            return rows
         }
 
         guard let result else {
             return []
         }
 
-        return [
+        rows = [
             trait(
                 label: "Overall symmetry",
                 value: qualitativeLabel(for: result.overallScore - 1),
@@ -301,9 +313,15 @@ final class ScanResultsViewModel: ObservableObject {
                 explanation: "The scan suggests the total impression responds well to disciplined routine and cleaner captures."
             )
         ]
+        harmonyTraitsCache = rows
+        return rows
     }
 
     func sectionTraits(for page: ScanResultsPageID) -> [ScanTraitRowModel] {
+        if let cachedRows = sectionTraitsCache[page] {
+            return cachedRows
+        }
+
         guard let result else {
             return []
         }
@@ -336,6 +354,7 @@ final class ScanResultsViewModel: ObservableObject {
         }
 
         guard page == .eyes, !isPremium else {
+            sectionTraitsCache[page] = baseTraits
             return baseTraits
         }
 
@@ -350,7 +369,9 @@ final class ScanResultsViewModel: ObservableObject {
             )
         }
 
-        return unlocked + locked
+        let rows = unlocked + locked
+        sectionTraitsCache[page] = rows
+        return rows
     }
 
     func photoURL(for sideProfile: Bool) -> URL? {
@@ -493,6 +514,13 @@ final class ScanResultsViewModel: ObservableObject {
 
     func combinedSideProfile() -> [String: ScanJSONValue] {
         result?.payload.sideProfile ?? [:]
+    }
+
+    private func resetDerivedCaches() {
+        // Performance: result pages request traits during SwiftUI refreshes and page swipes.
+        // Cache the flattened payload rows per result so body updates avoid repeated JSON walking.
+        harmonyTraitsCache = nil
+        sectionTraitsCache.removeAll(keepingCapacity: true)
     }
 
     func flatten(

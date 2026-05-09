@@ -318,7 +318,7 @@ enum AIscendChatError: LocalizedError, Equatable {
         case .missingEmail:
             "AIScend could not resolve a signed-in identity for chat."
         case .missingBackendBaseURL:
-            "Add `AISCEND_API_BASE_URL` to the app configuration before calling the advisor backend."
+            "Add `AISCEND_CHATBOT_API_URL` to the app configuration before calling the advisor backend."
         case .invalidResponse:
             "The advisor returned an unreadable response. Please try again."
         case .firestoreUnavailable:
@@ -332,6 +332,7 @@ enum AIscendChatError: LocalizedError, Equatable {
 }
 
 struct AIscendChatConfiguration {
+    let apiBaseURL: URL?
     let backendBaseURL: URL?
     let premiumURL: URL?
     let scanAnalyzePath: String
@@ -341,7 +342,8 @@ struct AIscendChatConfiguration {
     let fallbackFreeMonthlyLimit: Int?
 
     static let live = AIscendChatConfiguration(
-        backendBaseURL: urlValue(for: "AISCEND_API_BASE_URL"),
+        apiBaseURL: urlValue(for: ["API_BASE_URL", "AISCEND_API_BASE_URL"]),
+        backendBaseURL: urlValue(for: ["RAG_BASE_URL", "AISCEND_RAG_BASE_URL", "AISCEND_CHATBOT_API_URL", "AISCEND_API_BASE_URL"]),
         premiumURL: urlValue(for: "AISCEND_PREMIUM_URL"),
         scanAnalyzePath: stringValue(for: "AISCEND_SCAN_ANALYZE_PATH") ?? "scan/analyze",
         chatCollectionCandidates: uniqueValues(
@@ -389,6 +391,16 @@ struct AIscendChatConfiguration {
 
         if let numericValue = Bundle.main.object(forInfoDictionaryKey: key) as? NSNumber {
             return numericValue.intValue
+        }
+
+        return nil
+    }
+
+    private static func urlValue(for keys: [String]) -> URL? {
+        for key in keys {
+            if let url = urlValue(for: key) {
+                return url
+            }
         }
 
         return nil

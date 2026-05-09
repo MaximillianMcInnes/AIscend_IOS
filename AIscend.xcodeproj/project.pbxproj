@@ -35,11 +35,26 @@
 		82B6F7372F85246100B0974B /* AIscend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AIscend.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		82B6F7472F85246200B0974B /* AIscendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIscendTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82B6F7512F85246200B0974B /* AIscendUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIscendUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		82C0A1102FAB000100B0974B /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		82C0A1112FAB000100B0974B /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		CD69C0FF2FABA0B400B89683 /* Exceptions for "AIscend" folder in "AIscend" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 82B6F7362F85246100B0974B /* AIscend */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		82B6F7392F85246100B0974B /* AIscend */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				CD69C0FF2FABA0B400B89683 /* Exceptions for "AIscend" folder in "AIscend" target */,
+			);
 			path = AIscend;
 			sourceTree = "<group>";
 		};
@@ -88,6 +103,7 @@
 		82B6F72E2F85246100B0974B = {
 			isa = PBXGroup;
 			children = (
+				82C0A1122FAB000100B0974B /* Config */,
 				82B6F7392F85246100B0974B /* AIscend */,
 				82B6F74A2F85246200B0974B /* AIscendTests */,
 				82B6F7542F85246200B0974B /* AIscendUITests */,
@@ -103,6 +119,15 @@
 				82B6F7512F85246200B0974B /* AIscendUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		82C0A1122FAB000100B0974B /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				82C0A1102FAB000100B0974B /* Debug.xcconfig */,
+				82C0A1112FAB000100B0974B /* Release.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -265,7 +290,10 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(PROJECT_DIR)/.env",
 				"$(PROJECT_DIR)/AIscend/Resources/Configuration/GoogleService-Info.plist",
+				"$(PROJECT_DIR)/scripts/inject-ios-env.sh",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "Inject Google URL Scheme";
 			outputFileListPaths = (
@@ -274,7 +302,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "SERVICE_INFO_PLIST=\"${PROJECT_DIR}/AIscend/Resources/Configuration/GoogleService-Info.plist\"\nAPP_INFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\nif [ ! -f \"${SERVICE_INFO_PLIST}\" ]; then\n  echo \"GoogleService-Info.plist not found; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nREVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"${SERVICE_INFO_PLIST}\" 2>/dev/null)\n\nif [ -z \"${REVERSED_CLIENT_ID}\" ]; then\n  echo \"REVERSED_CLIENT_ID missing; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nif /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" >/dev/null 2>&1; then\n  if /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" | grep -Fq \"${REVERSED_CLIENT_ID}\"; then\n    exit 0\n  fi\nelse\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" \"${APP_INFO_PLIST}\"\nfi\n\nINDEX=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" 2>/dev/null | grep -c \"Dict {\")\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX} dict\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleTypeRole string Editor\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes array\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes:0 string ${REVERSED_CLIENT_ID}\" \"${APP_INFO_PLIST}\"\n";
+			shellScript = "SERVICE_INFO_PLIST=\"${PROJECT_DIR}/AIscend/Resources/Configuration/GoogleService-Info.plist\"\nAPP_INFO_PLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\n\n/bin/sh \"${PROJECT_DIR}/scripts/inject-ios-env.sh\" \"${APP_INFO_PLIST}\" \"${PROJECT_DIR}/.env\"\n\nif [ ! -f \"${SERVICE_INFO_PLIST}\" ]; then\n  echo \"GoogleService-Info.plist not found; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nREVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"${SERVICE_INFO_PLIST}\" 2>/dev/null)\n\nif [ -z \"${REVERSED_CLIENT_ID}\" ]; then\n  echo \"REVERSED_CLIENT_ID missing; skipping Google URL scheme injection.\"\n  exit 0\nfi\n\nif /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" >/dev/null 2>&1; then\n  if /usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" | grep -Fq \"${REVERSED_CLIENT_ID}\"; then\n    exit 0\n  fi\nelse\n  /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" \"${APP_INFO_PLIST}\"\nfi\n\nINDEX=$(/usr/libexec/PlistBuddy -c \"Print :CFBundleURLTypes\" \"${APP_INFO_PLIST}\" 2>/dev/null | grep -c \"Dict {\")\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX} dict\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleTypeRole string Editor\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes array\" \"${APP_INFO_PLIST}\"\n/usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes:${INDEX}:CFBundleURLSchemes:0 string ${REVERSED_CLIENT_ID}\" \"${APP_INFO_PLIST}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -448,6 +476,7 @@
 		};
 		82B6F75C2F85246200B0974B /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 82C0A1102FAB000100B0974B /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -458,7 +487,9 @@
 				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIscend/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AIscend uses the camera so you can capture daily photos and scan images inside the app.";
@@ -490,6 +521,7 @@
 		};
 		82B6F75D2F85246200B0974B /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 82C0A1112FAB000100B0974B /* Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -500,7 +532,9 @@
 				DEVELOPMENT_ASSET_PATHS = "\"AIscend/Resources/Preview Content\"";
 				DEVELOPMENT_TEAM = XG4ZNJKHN3;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = AIscend/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = AIscend;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "AIscend uses the camera so you can capture daily photos and scan images inside the app.";

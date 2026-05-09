@@ -311,8 +311,6 @@ private struct PreviousScanCardPhotoTile: View {
     let title: String
     let rawValue: String?
 
-    @State private var didRevealImage = false
-
     private var source: ScanPhotoSource {
         ScanPhotoSource(rawValue: rawValue)
     }
@@ -341,25 +339,20 @@ private struct PreviousScanCardPhotoTile: View {
         .clipShape(tileShape)
         .overlay(tileShape.stroke(Color.white.opacity(0.10), lineWidth: 1))
         .shadow(color: Color.black.opacity(0.24), radius: 16, x: 0, y: 10)
-        .onChange(of: rawValue) { _, _ in
-            didRevealImage = false
-        }
     }
 
     @ViewBuilder
     private var imageContent: some View {
         #if canImport(UIKit)
-        if let image = source.localURL.flatMap({ UIImage(contentsOfFile: $0.path) }) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
+        if source.hasImageSource {
+            AIscendCachedImage(
+                localURL: source.localURL,
+                remoteURL: source.remoteURL,
+                maxPixelDimension: 700
+            ) {
+                tilePlaceholder
+            }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .opacity(didRevealImage ? 1 : 0)
-                .scaleEffect(didRevealImage ? 1 : 1.035)
-                .blur(radius: didRevealImage ? 0 : 10)
-                .onAppear(perform: revealImageIfNeeded)
-        } else if let remoteURL = source.remoteURL {
-            remoteImage(remoteURL)
         }
         #else
         if let remoteURL = source.remoteURL {
@@ -376,10 +369,6 @@ private struct PreviousScanCardPhotoTile: View {
                     .resizable()
                     .scaledToFill()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .opacity(didRevealImage ? 1 : 0)
-                    .scaleEffect(didRevealImage ? 1 : 1.035)
-                    .blur(radius: didRevealImage ? 0 : 10)
-                    .onAppear(perform: revealImageIfNeeded)
             case .empty:
                 tilePlaceholder
                     .overlay(PreviousScanCardShimmer(cornerRadius: 24))
@@ -417,15 +406,6 @@ private struct PreviousScanCardPhotoTile: View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
     }
 
-    private func revealImageIfNeeded() {
-        guard !didRevealImage else {
-            return
-        }
-
-        withAnimation(.easeOut(duration: 0.42)) {
-            didRevealImage = true
-        }
-    }
 }
 
 private struct PreviousScanCardBadge: View {

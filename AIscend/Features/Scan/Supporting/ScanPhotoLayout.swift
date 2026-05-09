@@ -14,9 +14,36 @@ enum ScanPhotoLayout {
     static let portraitAspectRatio: CGFloat = 3.0 / 4.0
 }
 
+enum ScanCaptureGuide {
+    case front
+    case side
+
+    var title: String {
+        switch self {
+        case .front:
+            "Front selfie"
+        case .side:
+            "Side profile"
+        }
+    }
+
+    var instruction: String {
+        switch self {
+        case .front:
+            "Center your face in the outline with even lighting."
+        case .side:
+            "Turn 90 degrees and line up your forehead, nose, lips, and chin."
+        }
+    }
+}
+
 struct ScanPhotoSource {
     let localURL: URL?
     let remoteURL: URL?
+
+    var hasImageSource: Bool {
+        localURL != nil || remoteURL != nil
+    }
 
     init(rawValue: String?) {
         let trimmedValue = Self.trimmed(rawValue)
@@ -104,6 +131,32 @@ struct ScanPhotoSource {
 
 #if canImport(UIKit)
 extension UIImage {
+    static func aiscendPreparedScanImage(
+        from data: Data,
+        compressionQuality: CGFloat = 0.88
+    ) async -> (image: UIImage, data: Data)? {
+        await Task.detached(priority: .userInitiated) {
+            guard let image = UIImage(data: data) else {
+                return nil
+            }
+
+            return image.aiscendPreparedScanImage(compressionQuality: compressionQuality)
+        }.value
+    }
+
+    func aiscendPreparedScanImage(
+        compressionQuality: CGFloat = 0.88
+    ) -> (image: UIImage, data: Data)? {
+        // Performance: crop and JPEG encode camera photos away from SwiftUI state updates.
+        // Large picker images otherwise create visible stalls just before the preview appears.
+        let scanImage = aiscendCroppedToScanPortrait()
+        guard let compressedData = scanImage.jpegData(compressionQuality: compressionQuality) else {
+            return nil
+        }
+
+        return (scanImage, compressedData)
+    }
+
     func aiscendCroppedToScanPortrait(
         aspectRatio: CGFloat = ScanPhotoLayout.portraitAspectRatio
     ) -> UIImage {

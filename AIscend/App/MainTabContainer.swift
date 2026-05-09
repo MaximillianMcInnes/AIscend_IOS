@@ -52,6 +52,8 @@ struct MainTabContainer: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("aiscend.dailyCheckIn.lastRoutineStreakPromptDay")
     private var lastRoutineStreakPromptDay = ""
+    @AppStorage("aiscend.onboarding.didAutoOpenInitialScanUserID")
+    private var didAutoOpenInitialScanUserID = ""
 
     @Bindable var model: AppModel
     @Bindable var session: AuthSessionStore
@@ -64,6 +66,9 @@ struct MainTabContainer: View {
     @State private var showingStreaks = false
     @State private var showingScanCapture = false
     @State private var showingScanResults = false
+    @State private var showingGlowUpTracker = false
+    @State private var showingRoadmap = false
+    @State private var showingNutrition = false
     @State private var pendingChatPrompt: String?
     @State private var isKeyboardPresented = false
     @State private var usesQuickFadeSelection = false
@@ -72,6 +77,7 @@ struct MainTabContainer: View {
     @StateObject private var dailyPhotoStore = DailyPhotoStore()
     @StateObject private var hydrationStore = HydrationTrackingStore()
     @StateObject private var electrolyteStore = ElectrolyteTrackingStore()
+    @StateObject private var nutritionStore = NutritionStore()
     @StateObject private var notificationManager = NotificationManager()
     @Namespace private var tabNamespace
 
@@ -102,6 +108,7 @@ struct MainTabContainer: View {
             dailyPhotoStore.applyAuthenticatedUserID(session.user?.id)
             hydrationStore.applyAuthenticatedUserID(session.user?.id)
             electrolyteStore.applyAuthenticatedUserID(session.user?.id)
+            nutritionStore.applyAuthenticatedUserID(session.user?.id)
             model.refreshForCurrentDate()
             dailyCheckInStore.refreshForCurrentDate()
             hydrationStore.importLegacyIfNeeded(
@@ -112,8 +119,10 @@ struct MainTabContainer: View {
             if session.user != nil {
                 await notificationManager.activateRemindersForSignedInUser()
             }
-            maybePresentDailyPhotoPrompt(.firstOpen)
-            maybePresentRoutineStreakPromptIfNeeded()
+            if !queueInitialScanFlowAfterSignUpIfNeeded() {
+                maybePresentDailyPhotoPrompt(.firstOpen)
+                maybePresentRoutineStreakPromptIfNeeded()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -231,6 +240,26 @@ struct MainTabContainer: View {
                 }
             )
         }
+        .fullScreenCover(isPresented: $showingGlowUpTracker) {
+            GlowUpTrackerView {
+                showingGlowUpTracker = false
+            }
+        }
+        .fullScreenCover(isPresented: $showingRoadmap) {
+            AIScendRoadmapView(
+                onDismiss: {
+                    showingRoadmap = false
+                },
+                onOpenScan: {
+                    select(.scan)
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showingNutrition) {
+            NutritionDashboardView(store: nutritionStore) {
+                showingNutrition = false
+            }
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -267,6 +296,8 @@ struct MainTabContainer: View {
                 onOpenConsistency: { showingStreaks = true },
                 onOpenDailyPhoto: { showingDailyPhotoArchive = true },
                 onCaptureDailyPhoto: { showingDailyPhotoCapture = true },
+                onOpenGlowUpTracker: { showingGlowUpTracker = true },
+                onOpenRoadmap: { showingRoadmap = true },
                 onOpenScan: { select(.scan) },
                 onOpenAccount: openHomeProfile,
                 onRefine: { model.resetOnboarding() }
@@ -298,6 +329,7 @@ struct MainTabContainer: View {
                 onOpenCheckIn: { showingDailyCheckIn = true },
                 onOpenConsistency: { showingStreaks = true },
                 onOpenHydrationChat: openHydrationChat,
+                onOpenNutrition: { showingNutrition = true },
                 onRefine: { model.resetOnboarding() }
             )
             .toolbar(.hidden, for: .navigationBar)
@@ -313,7 +345,8 @@ struct MainTabContainer: View {
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
                 onOpenChat: { select(.chat) },
-                onOpenRoutine: { select(.routine) }
+                onOpenRoutine: { select(.routine) },
+                onOpenGlowUpTracker: { showingGlowUpTracker = true }
             )
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -340,7 +373,15 @@ struct MainTabContainer: View {
     }
 
     private var isPresentingBlockingModal: Bool {
-        showingDailyPhotoCapture || showingDailyPhotoArchive || showingDailyCheckIn || showingStreaks || showingScanCapture || showingScanResults
+        showingDailyPhotoCapture
+            || showingDailyPhotoArchive
+            || showingDailyCheckIn
+            || showingStreaks
+            || showingScanCapture
+            || showingScanResults
+            || showingGlowUpTracker
+            || showingRoadmap
+            || showingNutrition
     }
 
     private var shouldShowTabBar: Bool {
@@ -369,6 +410,34 @@ struct MainTabContainer: View {
         }
 
         showingDailyPhotoCapture = true
+    }
+
+    private func queueInitialScanFlowAfterSignUpIfNeeded() -> Bool {
+        guard let userID = session.user?.id, !userID.isEmpty else {
+            return false
+        }
+
+        guard model.hasCompletedEntryOnboarding, !model.hasCompletedOnboarding else {
+            return false
+        }
+
+        guard didAutoOpenInitialScanUserID != userID else {
+            return false
+        }
+
+        didAutoOpenInitialScanUserID = userID
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 520_000_000)
+            guard session.user?.id == userID, !isPresentingBlockingModal else {
+                return
+            }
+
+            select(.scan)
+            showingScanCapture = true
+        }
+
+        return true
     }
 
     private func maybePresentRoutineStreakPromptIfNeeded(now: Date = .now) {
@@ -407,9 +476,8 @@ struct MainTabContainer: View {
         let shouldQuickFade = tabDistance(from: selectedTab, to: tab) > 2
         usesQuickFadeSelection = shouldQuickFade
 
-        withAnimation(shouldQuickFade ? .easeOut(duration: 0.18) : .spring(response: 0.34, dampingFraction: 0.86)) {
-            selectedTab = tab
-        }
+        // Performance: keep the tab-bar highlight animated while the large tab content swaps without inherited animation.
+        selectedTab = tab
     }
 
     private func openHomeProfile() {

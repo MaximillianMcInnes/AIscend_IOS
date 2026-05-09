@@ -225,17 +225,7 @@ struct ScanResultsFlowView: View {
     }
 
     private func handlePaywallPrimary() {
-        guard allowsPostResultActions else {
-            paywallCoordinator.dismiss()
-            return
-        }
-
         paywallCoordinator.dismiss()
-
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            showingUpgrade = true
-        }
     }
 
     private func presentPaywall(

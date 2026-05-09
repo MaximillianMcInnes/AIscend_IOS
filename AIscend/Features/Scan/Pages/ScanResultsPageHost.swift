@@ -55,7 +55,7 @@ struct ScanResultsPageHost: View {
 
         case .eyes:
             EyesResultsPage(
-                face: viewModel.combinedFrontProfile(),
+                traits: viewModel.sectionTraits(for: .eyes),
                 isPaid: viewModel.isPremium,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
@@ -67,7 +67,7 @@ struct ScanResultsPageHost: View {
 
         case .lips:
             LipsResultsPage(
-                face: viewModel.combinedFrontProfile(),
+                traits: viewModel.sectionTraits(for: .lips),
                 isPaid: viewModel.isPremium,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
@@ -79,7 +79,7 @@ struct ScanResultsPageHost: View {
 
         case .jaw:
             JawResultsPage(
-                face: viewModel.combinedFrontProfile(),
+                traits: viewModel.sectionTraits(for: .jaw),
                 isPaid: viewModel.isPremium,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
@@ -91,8 +91,7 @@ struct ScanResultsPageHost: View {
 
         case .sideProfile:
             SideProfileResultsPage(
-                nose: viewModel.combinedFrontProfile().merging(viewModel.combinedSideProfile()) { _, side in side },
-                harmony: viewModel.combinedFrontProfile().merging(viewModel.combinedSideProfile()) { _, side in side },
+                traits: viewModel.sectionTraits(for: .sideProfile),
                 isPaid: viewModel.isPremium,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,

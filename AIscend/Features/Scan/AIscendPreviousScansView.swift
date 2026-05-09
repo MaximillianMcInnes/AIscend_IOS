@@ -38,47 +38,43 @@ struct AIscendPreviousScansView: View {
         )
     }
 
-    private var sortedItems: [ScanArchiveItem] {
-        sortMode.sorted(viewModel.items)
-    }
-
-    private var visibleItems: [ScanArchiveItem] {
-        Array(sortedItems.prefix(visibleItemLimit))
-    }
-
-    private var bestScanID: String? {
-        sortedItems.max { lhs, rhs in
+    private var archivePresentation: ScanArchivePresentation {
+        // Performance: the archive used to sort and scan the same array several times per render.
+        // Build the presentation values once so card scrolling only pays that cost on input changes.
+        let sortedItems = sortMode.sorted(viewModel.items)
+        let visibleItems = Array(sortedItems.prefix(visibleItemLimit))
+        let bestScan = sortedItems.max { lhs, rhs in
             if lhs.record.overallScore == rhs.record.overallScore {
                 return lhs.createdAt < rhs.createdAt
             }
             return lhs.record.overallScore < rhs.record.overallScore
-        }?.id
-    }
+        }
+        let latestScan = sortedItems.max(by: { $0.createdAt < $1.createdAt })
 
-    private var latestScanID: String? {
-        sortedItems.max(by: { $0.createdAt < $1.createdAt })?.id
-    }
-
-    private var bestScore: Int {
-        Int((viewModel.items.map(\.record.overallScore).max() ?? 0).rounded())
-    }
-
-    private var latestScore: Int {
-        Int((viewModel.items.max(by: { $0.createdAt < $1.createdAt })?.record.overallScore ?? 0).rounded())
+        return ScanArchivePresentation(
+            sortedItems: sortedItems,
+            visibleItems: visibleItems,
+            bestScanID: bestScan?.id,
+            latestScanID: latestScan?.id,
+            bestScore: Int((bestScan?.record.overallScore ?? 0).rounded()),
+            latestScore: Int((latestScan?.record.overallScore ?? 0).rounded())
+        )
     }
 
     var body: some View {
+        let presentation = archivePresentation
+
         PreviousScansView(
             embedded: embedded,
             items: viewModel.items,
-            visibleItems: visibleItems,
+            visibleItems: presentation.visibleItems,
             isLoading: viewModel.isLoading,
             errorMessage: viewModel.errorMessage,
             sortMode: $sortMode,
-            bestScanID: bestScanID,
-            latestScanID: latestScanID,
-            bestScore: bestScore,
-            latestScore: latestScore,
+            bestScanID: presentation.bestScanID,
+            latestScanID: presentation.latestScanID,
+            bestScore: presentation.bestScore,
+            latestScore: presentation.latestScore,
             onOpenScanRecord: onOpenScanRecord,
             onLoadMore: loadMoreIfNeeded(currentItem:)
         )
@@ -102,10 +98,13 @@ struct AIscendPreviousScansView: View {
     }
 
     private func resetVisibleItems() {
-        visibleItemLimit = min(Self.pageSize, sortedItems.count)
+        visibleItemLimit = min(Self.pageSize, sortMode.sorted(viewModel.items).count)
     }
 
     private func loadMoreIfNeeded(currentItem: ScanArchiveItem) {
+        let sortedItems = sortMode.sorted(viewModel.items)
+        let visibleItems = Array(sortedItems.prefix(visibleItemLimit))
+
         guard currentItem.id == visibleItems.last?.id,
               visibleItemLimit < sortedItems.count
         else {
@@ -115,6 +114,15 @@ struct AIscendPreviousScansView: View {
         visibleItemLimit = min(visibleItemLimit + Self.pageSize, sortedItems.count)
     }
 
+}
+
+private struct ScanArchivePresentation {
+    let sortedItems: [ScanArchiveItem]
+    let visibleItems: [ScanArchiveItem]
+    let bestScanID: String?
+    let latestScanID: String?
+    let bestScore: Int
+    let latestScore: Int
 }
 
 enum ScanArchiveSortMode: String, CaseIterable, Identifiable {

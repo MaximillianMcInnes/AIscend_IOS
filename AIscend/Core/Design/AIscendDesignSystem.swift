@@ -5,7 +5,13 @@
 //  Created by Codex on 4/7/26.
 //
 
+import Foundation
+import ImageIO
 import SwiftUI
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum AIscendPanelStyle {
     case standard
@@ -933,3 +939,154 @@ extension View {
         modifier(AIscendInputModifier(isFocused: isFocused))
     }
 }
+
+#if canImport(UIKit)
+private final class AIscendImageMemoryCache {
+    static let shared = AIscendImageMemoryCache()
+
+    private let cache = NSCache<NSString, UIImage>()
+
+    private init() {
+        cache.countLimit = 96
+        cache.totalCostLimit = 64 * 1_024 * 1_024
+    }
+
+    func image(for key: String) -> UIImage? {
+        cache.object(forKey: key as NSString)
+    }
+
+    func insert(_ image: UIImage, for key: String) {
+        let pixelCount = Int(image.size.width * image.scale * image.size.height * image.scale)
+        cache.setObject(image, forKey: key as NSString, cost: pixelCount * 4)
+    }
+}
+
+enum AIscendImageLoader {
+    static func cachedImage(
+        localURL: URL?,
+        remoteURL: URL?,
+        maxPixelDimension: CGFloat
+    ) async -> UIImage? {
+        guard let sourceURL = localURL ?? remoteURL else {
+            return nil
+        }
+
+        let key = cacheKey(for: sourceURL, maxPixelDimension: maxPixelDimension)
+        if let cachedImage = AIscendImageMemoryCache.shared.image(for: key) {
+            return cachedImage
+        }
+
+        let image = await loadDownsampledImage(
+            from: sourceURL,
+            maxPixelDimension: maxPixelDimension
+        )
+
+        if let image {
+            AIscendImageMemoryCache.shared.insert(image, for: key)
+        }
+
+        return image
+    }
+
+    private static func cacheKey(for url: URL, maxPixelDimension: CGFloat) -> String {
+        "\(url.absoluteString)#\(Int(maxPixelDimension.rounded()))"
+    }
+
+    private static func loadDownsampledImage(
+        from url: URL,
+        maxPixelDimension: CGFloat
+    ) async -> UIImage? {
+        await Task.detached(priority: .utility) {
+            do {
+                let data: Data
+                if url.isFileURL {
+                    data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                } else {
+                    data = try Data(contentsOf: url)
+                }
+
+                return downsampledImage(from: data, maxPixelDimension: maxPixelDimension)
+            } catch {
+                return nil
+            }
+        }.value
+    }
+
+    private static func downsampledImage(
+        from data: Data,
+        maxPixelDimension: CGFloat
+    ) -> UIImage? {
+        let options = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let imageSource = CGImageSourceCreateWithData(data as CFData, options) else {
+            return UIImage(data: data)
+        }
+
+        let dimension = max(320, Int(maxPixelDimension.rounded(.up)))
+        let thumbnailOptions = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: dimension
+        ] as CFDictionary
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, thumbnailOptions) else {
+            return UIImage(data: data)
+        }
+
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+struct AIscendCachedImage<Placeholder: View>: View {
+    let localURL: URL?
+    let remoteURL: URL?
+    let maxPixelDimension: CGFloat
+    @ViewBuilder let placeholder: Placeholder
+
+    @State private var image: UIImage?
+
+    private var sourceKey: String {
+        "\(localURL?.absoluteString ?? "")|\(remoteURL?.absoluteString ?? "")|\(Int(maxPixelDimension.rounded()))"
+    }
+
+    init(
+        localURL: URL? = nil,
+        remoteURL: URL? = nil,
+        maxPixelDimension: CGFloat = 900,
+        @ViewBuilder placeholder: () -> Placeholder
+    ) {
+        self.localURL = localURL
+        self.remoteURL = remoteURL
+        self.maxPixelDimension = maxPixelDimension
+        self.placeholder = placeholder()
+    }
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                placeholder
+            }
+        }
+        .task(id: sourceKey) {
+            await loadImage()
+        }
+        .onChange(of: sourceKey) { _, _ in
+            image = nil
+        }
+    }
+
+    @MainActor
+    private func loadImage() async {
+        // Performance: decode and resize camera/remote images off-main so scroll and transitions stay smooth.
+        image = await AIscendImageLoader.cachedImage(
+            localURL: localURL,
+            remoteURL: remoteURL,
+            maxPixelDimension: maxPixelDimension
+        )
+    }
+}
+#endif

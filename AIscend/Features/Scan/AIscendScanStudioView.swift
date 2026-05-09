@@ -43,6 +43,7 @@ struct AIscendScanStudioView: View {
     let notificationManager: NotificationManager
     var onOpenChat: () -> Void = {}
     var onOpenRoutine: () -> Void = {}
+    var onOpenGlowUpTracker: () -> Void = {}
 
     @State private var selectedTab: ScanStudioTab = .newScan
     @State private var showScanFlow = false
@@ -112,6 +113,7 @@ struct AIscendScanStudioView: View {
                 selection: $selectedTab,
                 snapshot: snapshot,
                 session: session,
+                onOpenGlowUpTracker: onOpenGlowUpTracker,
                 onOpenScanRecord: { record in
                     let resolvedID = record.meta.scanId?.trimmingCharacters(in: .whitespacesAndNewlines)
                     selectedArchivedScan = ArchivedScanPresentation(
@@ -328,6 +330,7 @@ private struct AIscendPreviousScansStudioPage: View {
     @Binding var selection: ScanStudioTab
     let snapshot: DashboardSnapshot
     let session: AuthSessionStore
+    let onOpenGlowUpTracker: () -> Void
     let onOpenScanRecord: (PersistedScanRecord) -> Void
 
     var body: some View {
@@ -335,6 +338,7 @@ private struct AIscendPreviousScansStudioPage: View {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 ScanStudioHeader(snapshot: snapshot)
                 ScanStudioModeToggle(selection: $selection)
+                GlowUpTrackerArchiveEntryCard(onOpenGlowUpTracker: onOpenGlowUpTracker)
                 AIscendPreviousScansTabView(
                     session: session,
                     embedded: true,
@@ -348,6 +352,59 @@ private struct AIscendPreviousScansStudioPage: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("scan-studio-previous-scans-page")
+    }
+}
+
+private struct GlowUpTrackerArchiveEntryCard: View {
+    let onOpenGlowUpTracker: () -> Void
+
+    var body: some View {
+        Button(action: onOpenGlowUpTracker) {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: "chart.xyaxis.line", accent: .sky, size: 52)
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                    AIscendBadge(
+                        title: "Progress engine",
+                        symbol: "sparkles",
+                        style: .accent
+                    )
+
+                    Text("Open Glow-Up Tracker")
+                        .aiscendTextStyle(.cardTitle)
+
+                    Text("Compare latest scans, metric deltas, and private timeline movement.")
+                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: AIscendTheme.Spacing.small)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+            }
+            .padding(AIscendTheme.Spacing.mediumLarge)
+            .background(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.surfaceGlass.opacity(0.92),
+                                AIscendTheme.Colors.accentDeep.opacity(0.28),
+                                AIscendTheme.Colors.cardGradientEnd.opacity(0.98)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.24), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

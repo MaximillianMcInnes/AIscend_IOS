@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_BASE_URL</key>
+	<string>$(API_BASE_URL)</string>
+	<key>RAG_BASE_URL</key>
+	<string>$(RAG_BASE_URL)</string>
+	<key>AISCEND_API_BASE_URL</key>
+	<string>$(AISCEND_API_BASE_URL)</string>
+	<key>AISCEND_CHATBOT_API_URL</key>
+	<string>$(AISCEND_CHATBOT_API_URL)</string>
+	<key>AISCEND_RAG_BASE_URL</key>
+	<string>$(AISCEND_RAG_BASE_URL)</string>
+	<key>AISCEND_SCAN_ANALYZE_PATH</key>
+	<string>$(AISCEND_SCAN_ANALYZE_PATH)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLIconFile</key>
+			<string>icon_1024</string>
+			<key>CFBundleURLName</key>
+			<string>uk.co.aiscend.AIscend</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aiscend</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

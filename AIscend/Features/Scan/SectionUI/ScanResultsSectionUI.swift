@@ -241,13 +241,15 @@ struct ResultsPhotoCard: View {
     @ViewBuilder
     private var photoContent: some View {
         #if canImport(UIKit)
-        if let localImage = source.localURL.flatMap({ UIImage(contentsOfFile: $0.path) }) {
-            Image(uiImage: localImage)
-                .resizable()
-                .scaledToFill()
+        if source.hasImageSource {
+            AIscendCachedImage(
+                localURL: source.localURL,
+                remoteURL: source.remoteURL,
+                maxPixelDimension: 900
+            ) {
+                ResultsPhotoPlaceholder()
+            }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if let remoteURL = source.remoteURL {
-            remoteImage(remoteURL)
         } else {
             ResultsPhotoPlaceholder()
         }

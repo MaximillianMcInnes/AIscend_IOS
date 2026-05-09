@@ -187,12 +187,10 @@ private struct DashboardDailyPhotoPreviewTile: View {
                     )
                 )
 
-            if let url = store.imageURL(for: entry),
-               let image = UIImage(contentsOfFile: url.path)
-            {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if let url = store.imageURL(for: entry) {
+                AIscendCachedImage(localURL: url, maxPixelDimension: 560) {
+                    Color.clear
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             }
@@ -643,8 +641,9 @@ struct DailyPhotoCaptureSheet: View {
                 return
             }
 
-            guard let image = UIImage(data: data),
-                  let compressedData = image.jpegData(compressionQuality: 0.88) else {
+            guard let compressedData = await Task.detached(priority: .userInitiated, operation: {
+                UIImage(data: data)?.jpegData(compressionQuality: 0.88)
+            }).value else {
                 feedbackMessage = "That photo format is not supported."
                 isSaving = false
                 return
@@ -693,12 +692,10 @@ private struct DailyPhotoHeroPreview: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            if let url = store.imageURL(for: entry),
-               let image = UIImage(contentsOfFile: url.path)
-            {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if let url = store.imageURL(for: entry) {
+                AIscendCachedImage(localURL: url, maxPixelDimension: 900) {
+                    Color.clear
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             }
@@ -745,12 +742,10 @@ private struct DailyPhotoThumbnailTile: View {
                     .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.62))
                     .frame(height: 92)
 
-                if let url = store.imageURL(for: entry),
-                   let image = UIImage(contentsOfFile: url.path)
-                {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                if let url = store.imageURL(for: entry) {
+                    AIscendCachedImage(localURL: url, maxPixelDimension: 360) {
+                        Color.clear
+                    }
                         .frame(maxWidth: .infinity)
                         .frame(height: 92)
                         .clipped()
@@ -818,6 +813,7 @@ private struct DailyPhotoSheetCard<Content: View>: View {
 
 struct AIscendEditedCameraPicker: UIViewControllerRepresentable {
     var preferredCameraDevice: UIImagePickerController.CameraDevice = .front
+    var guide: ScanCaptureGuide? = nil
     let onImagePicked: (UIImage) -> Void
     let onCancel: () -> Void
 
@@ -835,6 +831,14 @@ struct AIscendEditedCameraPicker: UIViewControllerRepresentable {
 
         if UIImagePickerController.isCameraDeviceAvailable(preferredCameraDevice) {
             picker.cameraDevice = preferredCameraDevice
+        }
+
+        if let guide {
+            let overlayView = ScanCameraGuideOverlayView(guide: guide)
+            overlayView.frame = UIScreen.main.bounds
+            overlayView.backgroundColor = .clear
+            overlayView.isUserInteractionEnabled = false
+            picker.cameraOverlayView = overlayView
         }
 
         return picker
@@ -868,6 +872,140 @@ struct AIscendEditedCameraPicker: UIViewControllerRepresentable {
                 onCancel()
             }
         }
+    }
+}
+
+private final class ScanCameraGuideOverlayView: UIView {
+    private let guide: ScanCaptureGuide
+
+    init(guide: ScanCaptureGuide) {
+        self.guide = guide
+        super.init(frame: .zero)
+        isOpaque = false
+        contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else {
+            return
+        }
+
+        let guideRect = CGRect(
+            x: rect.midX - min(rect.width * 0.34, 150),
+            y: rect.midY - min(rect.height * 0.25, 230),
+            width: min(rect.width * 0.68, 300),
+            height: min(rect.height * 0.50, 460)
+        )
+
+        context.setFillColor(UIColor.black.withAlphaComponent(0.18).cgColor)
+        context.fill(rect)
+        context.clear(guideRect.insetBy(dx: -18, dy: -22))
+
+        let path = UIBezierPath()
+        switch guide {
+        case .front:
+            drawFrontGuide(in: guideRect, path: path)
+        case .side:
+            drawSideGuide(in: guideRect, path: path)
+        }
+
+        UIColor.white.withAlphaComponent(0.92).setStroke()
+        path.lineWidth = 4
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.stroke()
+
+        drawInstruction(in: rect)
+    }
+
+    private func drawFrontGuide(in rect: CGRect, path: UIBezierPath) {
+        let w = rect.width
+        let h = rect.height
+
+        path.append(UIBezierPath(ovalIn: CGRect(
+            x: rect.minX + w * 0.22,
+            y: rect.minY + h * 0.10,
+            width: w * 0.56,
+            height: h * 0.58
+        )))
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.72))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.72),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.41, y: rect.minY + h * 0.82),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.59, y: rect.minY + h * 0.82)
+        )
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.42))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.46, y: rect.minY + h * 0.42))
+        path.move(to: CGPoint(x: rect.minX + w * 0.54, y: rect.minY + h * 0.42))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.42))
+    }
+
+    private func drawSideGuide(in rect: CGRect, path: UIBezierPath) {
+        let w = rect.width
+        let h = rect.height
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.45, y: rect.minY + h * 0.10))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.32, y: rect.minY + h * 0.55),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.16, y: rect.minY + h * 0.14),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.16, y: rect.minY + h * 0.44)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.72),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.64),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.40, y: rect.minY + h * 0.70)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.76, y: rect.minY + h * 0.60),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.60, y: rect.minY + h * 0.74),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.70, y: rect.minY + h * 0.66)
+        )
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.55))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.72, y: rect.minY + h * 0.45),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.70, y: rect.minY + h * 0.54),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.76, y: rect.minY + h * 0.50)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.36),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.42),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.63, y: rect.minY + h * 0.40)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.45, y: rect.minY + h * 0.10),
+            controlPoint1: CGPoint(x: rect.minX + w * 0.65, y: rect.minY + h * 0.22),
+            controlPoint2: CGPoint(x: rect.minX + w * 0.60, y: rect.minY + h * 0.11)
+        )
+    }
+
+    private func drawInstruction(in rect: CGRect) {
+        let text = guide.instruction as NSString
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 15, weight: .semibold),
+            .foregroundColor: UIColor.white,
+            .paragraphStyle: paragraph
+        ]
+
+        let textRect = CGRect(
+            x: rect.minX + 32,
+            y: rect.maxY - 150,
+            width: rect.width - 64,
+            height: 56
+        )
+
+        let backgroundPath = UIBezierPath(roundedRect: textRect.insetBy(dx: -14, dy: -10), cornerRadius: 18)
+        UIColor.black.withAlphaComponent(0.46).setFill()
+        backgroundPath.fill()
+        text.draw(in: textRect, withAttributes: attributes)
     }
 }
 
@@ -1249,12 +1387,10 @@ private struct DailyPhotoArchiveHero: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous)
                 .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.62))
 
-            if let url = store.imageURL(for: entry),
-               let image = UIImage(contentsOfFile: url.path)
-            {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+            if let url = store.imageURL(for: entry) {
+                AIscendCachedImage(localURL: url, maxPixelDimension: 1_000) {
+                    Color.clear
+                }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             }
@@ -1322,12 +1458,10 @@ private struct DailyPhotoArchiveGridTile: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.68))
 
-                if let url = store.imageURL(for: entry),
-                   let image = UIImage(contentsOfFile: url.path)
-                {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
+                if let url = store.imageURL(for: entry) {
+                    AIscendCachedImage(localURL: url, maxPixelDimension: 560) {
+                        Color.clear
+                    }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
                 }

@@ -17,10 +17,12 @@ struct AuthView: View {
             AIscendBackdrop()
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xLarge) {
-                    heroPanel
-                    signInPanel
-                    infrastructurePanel
+                VStack(spacing: AIscendTheme.Spacing.large) {
+                    headerBar
+
+                    Spacer(minLength: 18)
+
+                    loginPanel
 
                     if let configurationMessage = session.configurationMessage {
                         statusPanel(
@@ -49,152 +51,211 @@ struct AuthView: View {
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
                 .padding(.top, AIscendTheme.Spacing.large)
                 .padding(.bottom, AIscendTheme.Spacing.xxLarge)
+                .frame(maxWidth: 560)
+                .frame(maxWidth: .infinity)
             }
         }
     }
 
-    private var heroPanel: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            HStack {
-                AIscendBrandMark(size: 56)
-
-                Spacer()
-
-                AIscendBadge(
-                    title: "Encrypted",
-                    symbol: "checkmark.seal.fill",
-                    style: .neutral
-                )
-            }
-
-            AIscendSectionHeader(
-                eyebrow: "AIScend",
-                title: "Secure the workspace and continue with intention.",
-                subtitle: "Sign in to preserve the entry setup, keep the experience private, and move into a more structured AIScend environment built around \(model.analysisGoalSummary.lowercased()).",
-                prominence: .hero
-            )
-
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                AIscendBadge(title: "Google", symbol: "globe", style: .neutral)
-                AIscendBadge(title: "Apple", symbol: "apple.logo", style: .neutral)
-                AIscendBadge(title: "Firebase", symbol: "bolt.fill", style: .neutral)
-                if session.canUseGoogleSignIn {
-                    AIscendBadge(title: "Ready", symbol: "checkmark.circle.fill", style: .success)
-                }
-            }
-
-            if !model.analysisGoals.isEmpty {
-                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                    Text("Configured focus")
-                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: AIscendTheme.Spacing.small) {
-                            ForEach(model.analysisGoals.prefix(3)) { goal in
-                                AIscendCapsule(
-                                    title: goal.shortTitle,
-                                    symbol: goal.symbol,
-                                    isActive: true
-                                )
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                            ForEach(model.analysisGoals.prefix(3)) { goal in
-                                AIscendCapsule(
-                                    title: goal.shortTitle,
-                                    symbol: goal.symbol,
-                                    isActive: true
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .padding(AIscendTheme.Spacing.xLarge)
-        .aiscendPanel(.hero)
-    }
-
-    private var signInPanel: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            HStack(alignment: .center) {
-                AIscendSectionHeader(
-                    eyebrow: "Access",
-                    title: "Enter the workspace",
-                    subtitle: "Choose the identity provider you want tied to your private workspace, analysis intent, and future device state."
-                )
-
-                Spacer(minLength: AIscendTheme.Spacing.medium)
-
-                if session.isPerformingAuthAction {
-                    AIscendLoadingIndicator()
-                        .frame(width: 44, height: 44)
-                        .scaleEffect(0.6)
-                }
-            }
-
+    private var headerBar: some View {
+        HStack {
             Button {
-                Task {
-                    await session.signInWithGoogle()
+                withAnimation(.smooth(duration: 0.3)) {
+                    model.resetEntryIntro()
                 }
             } label: {
-                AIscendButtonLabel(
-                    title: "Continue with Google",
-                    leadingSymbol: "globe",
-                    trailingSymbol: "arrow.up.right"
-                )
+                Image(systemName: "arrow.left")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    .frame(width: 48, height: 48)
+                    .background(
+                        Circle()
+                            .fill(AIscendTheme.Colors.surfaceGlass.opacity(0.72))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                    )
             }
-            .buttonStyle(AIscendButtonStyle(variant: .secondary))
-            .disabled(!session.canUseGoogleSignIn || session.isPerformingAuthAction)
-            .opacity(session.canUseGoogleSignIn ? 1 : 0.55)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back to start")
 
-            SignInWithAppleButton(.signIn) { request in
-                session.prepareAppleSignInRequest(request)
-            } onCompletion: { result in
-                session.handleAppleSignInCompletion(result)
-            }
-            .signInWithAppleButtonStyle(.white)
-            .frame(height: 56)
-            .clipShape(RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous))
-            .disabled(!session.canUseAppleSignIn || session.isPerformingAuthAction)
-            .opacity(session.canUseAppleSignIn ? 1 : 0.55)
-
-            Text("Google relies on the reversed client ID from `GoogleService-Info.plist`, and Apple requires the Apple provider to be enabled inside Firebase Authentication.")
-                .aiscendTextStyle(.secondaryBody)
+            Spacer()
         }
-        .padding(AIscendTheme.Spacing.xLarge)
-        .aiscendPanel(.elevated)
     }
 
-    private var infrastructurePanel: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            AIscendSectionHeader(
-                eyebrow: "Why this matters",
-                title: "Built like a private members dashboard",
-                subtitle: "The visual system is dark, controlled, and data-forward. Auth is the gate that keeps the rest of the product feeling personal and high-trust."
-            )
+    private var loginPanel: some View {
+        VStack(spacing: 24) {
+            AIscendBrandMark(size: 62, showsWordmark: false)
+                .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.24), radius: 26, x: 0, y: 14)
 
-            VStack(spacing: AIscendTheme.Spacing.medium) {
-                authPoint(
-                    symbol: "lock.fill",
-                    title: "Session-gated experience",
-                    copy: "Onboarding, dashboard, and account views stay behind a Firebase-authenticated session."
+            VStack(spacing: 8) {
+                Text("Sign in to save your plan")
+                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text("Your routine is ready. Choose one secure way in.")
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+
+            planSummaryStrip
+
+            VStack(spacing: 12) {
+                Button {
+                    Task {
+                        await session.signInWithGoogle()
+                    }
+                } label: {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        Text("G")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(Color.white.opacity(0.12)))
+
+                        Text("Continue with Google")
+                            .font(.system(size: 17, weight: .bold, design: .rounded))
+                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                        Spacer()
+                    }
+                    .padding(.horizontal, AIscendTheme.Spacing.large)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 60)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.11))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!session.canUseGoogleSignIn || session.isPerformingAuthAction)
+                .opacity(session.canUseGoogleSignIn ? 1 : 0.48)
+
+                SignInWithAppleButton(.signIn) { request in
+                    session.prepareAppleSignInRequest(request)
+                } onCompletion: { result in
+                    session.handleAppleSignInCompletion(result)
+                }
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.white.opacity(0.22), lineWidth: AIscendTheme.Stroke.thin)
                 )
-                authPoint(
-                    symbol: "person.crop.circle.badge.checkmark",
-                    title: "Provider-aware account state",
-                    copy: "AIScend tracks Apple and Google sign-in cleanly so sign-out and restoration are predictable."
-                )
-                authPoint(
-                    symbol: "chart.bar.doc.horizontal.fill",
-                    title: "Per-user local continuity",
-                    copy: "Routine choices and progress are namespaced by Firebase user ID on the device."
-                )
+                .shadow(color: Color.black.opacity(0.24), radius: 18, x: 0, y: 12)
+                .disabled(!session.canUseAppleSignIn || session.isPerformingAuthAction)
+                .opacity(session.canUseAppleSignIn ? 1 : 0.48)
+            }
+
+            if session.isPerformingAuthAction {
+                HStack(spacing: AIscendTheme.Spacing.small) {
+                    AIscendLoadingIndicator(size: 16, lineWidth: 2)
+
+                    Text("Securing your session")
+                        .aiscendTextStyle(.caption)
+                }
+                .frame(minHeight: 24)
             }
         }
-        .padding(AIscendTheme.Spacing.xLarge)
-        .aiscendPanel(.standard)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 30)
+        .background {
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.elevatedSurface.opacity(0.96),
+                            AIscendTheme.Colors.surfaceInteractive.opacity(0.82)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            RadialGradient(
+                                colors: [
+                                    AIscendTheme.Colors.accentGlow.opacity(0.16),
+                                    AIscendTheme.Colors.accentPrimary.opacity(0.06),
+                                    .clear
+                                ],
+                                center: .top,
+                                startRadius: 12,
+                                endRadius: 280
+                            )
+                        )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.12),
+                                    .clear
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .center
+                            )
+                        )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.22),
+                                    AIscendTheme.Colors.accentGlow.opacity(0.18),
+                                    Color.white.opacity(0.08)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: AIscendTheme.Stroke.thin
+                        )
+                }
+        }
+        .shadow(color: AIscendTheme.Shadow.card, radius: 30, x: 0, y: 20)
+        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.12), radius: 28, x: 0, y: 0)
+    }
+
+    private var planSummaryStrip: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.accentPrimary)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(AIscendTheme.Colors.accentPrimary.opacity(0.14)))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Private plan locked in")
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                Text("Sync routine, scans, and progress")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textMuted)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.white.opacity(0.07))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 1)
+        )
     }
 
     private func statusPanel(title: String, message: String, style: AIscendBadgeStyle) -> some View {
@@ -208,19 +269,6 @@ struct AuthView: View {
         .aiscendPanel(.muted)
     }
 
-    private func authPoint(symbol: String, title: String, copy: String) -> some View {
-        HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
-            AIscendIconOrb(symbol: symbol, accent: .sky, size: 42)
-
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                Text(title)
-                    .aiscendTextStyle(.cardTitle)
-
-                Text(copy)
-                    .aiscendTextStyle(.body)
-            }
-        }
-    }
 }
 
 #Preview {
