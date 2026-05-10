@@ -72,6 +72,7 @@ struct MainTabContainer: View {
     @State private var pendingChatPrompt: String?
     @State private var isKeyboardPresented = false
     @State private var usesQuickFadeSelection = false
+    @State private var subscriptionQuota: AIscendChatQuota = .unknown
     @StateObject private var badgeManager = BadgeManager()
     @StateObject private var dailyCheckInStore = DailyCheckInStore()
     @StateObject private var dailyPhotoStore = DailyPhotoStore()
@@ -119,6 +120,7 @@ struct MainTabContainer: View {
             if session.user != nil {
                 await notificationManager.activateRemindersForSignedInUser()
             }
+            await refreshSubscriptionStatus()
             if !queueInitialScanFlowAfterSignUpIfNeeded() {
                 maybePresentDailyPhotoPrompt(.firstOpen)
                 maybePresentRoutineStreakPromptIfNeeded()
@@ -167,7 +169,7 @@ struct MainTabContainer: View {
                 dailyCheckInStore: dailyCheckInStore,
                 badgeManager: badgeManager,
                 notificationManager: notificationManager,
-                isPremium: badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked }),
+                isPremium: hasPremiumAccess,
                 onComplete: {},
                 onDismiss: { showingDailyCheckIn = false }
             )
@@ -196,6 +198,7 @@ struct MainTabContainer: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isPremium: hasPremiumAccess,
                 onOpenRoutine: {
                     select(.routine)
                     showingScanCapture = false
@@ -289,6 +292,7 @@ struct MainTabContainer: View {
                 hydrationStore: hydrationStore,
                 electrolyteStore: electrolyteStore,
                 badgeManager: badgeManager,
+                isPremium: hasPremiumAccess,
                 onOpenAdvisor: { select(.chat) },
                 onOpenHydrationChat: openHydrationChat,
                 onOpenRoutine: { select(.routine) },
@@ -296,7 +300,6 @@ struct MainTabContainer: View {
                 onOpenConsistency: { showingStreaks = true },
                 onOpenDailyPhoto: { showingDailyPhotoArchive = true },
                 onCaptureDailyPhoto: { showingDailyPhotoCapture = true },
-                onOpenGlowUpTracker: { showingGlowUpTracker = true },
                 onOpenRoadmap: { showingRoadmap = true },
                 onOpenScan: { select(.scan) },
                 onOpenAccount: openHomeProfile,
@@ -382,6 +385,45 @@ struct MainTabContainer: View {
             || showingGlowUpTracker
             || showingRoadmap
             || showingNutrition
+    }
+
+    private var hasPremiumAccess: Bool {
+        subscriptionQuota.isPremium || badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked })
+    }
+
+    private func refreshSubscriptionStatus() async {
+        async let repositoryQuota = AIscendChatRepository().loadQuota(
+            for: session.user?.email,
+            userID: session.user?.id
+        )
+        async let authQuota = AIscendChatService().loadAuthQuotaSnapshot()
+
+        subscriptionQuota = mergeQuota(repository: await repositoryQuota, auth: await authQuota)
+    }
+
+    private func mergeQuota(repository: AIscendChatQuota, auth: AIscendChatQuota) -> AIscendChatQuota {
+        var merged = repository
+        merged.isPremium = repository.isPremium || auth.isPremium
+
+        if merged.remainingChats == nil {
+            merged.remainingChats = auth.remainingChats
+        }
+
+        if merged.monthlyLimit == nil {
+            merged.monthlyLimit = auth.monthlyLimit
+        }
+
+        if merged.usedChats == nil {
+            merged.usedChats = auth.usedChats
+        }
+
+        merged.trialEligible = repository.trialEligible && auth.trialEligible
+
+        if merged.sourceDescription == nil {
+            merged.sourceDescription = auth.sourceDescription
+        }
+
+        return merged
     }
 
     private var shouldShowTabBar: Bool {

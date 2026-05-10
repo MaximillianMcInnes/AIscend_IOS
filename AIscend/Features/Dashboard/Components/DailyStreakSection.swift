@@ -14,50 +14,64 @@ struct DailyStreakSection: View {
         DailyStreakWeekday.currentWeek(checkedInToday: checkedInToday, streakDays: liveStreakDays)
     }
 
+    private var statusTitle: String {
+        if checkedInToday {
+            return "Protected today"
+        }
+
+        return liveStreakDays > 0 ? "Keep the chain alive" : "Start today"
+    }
+
     var body: some View {
         Button(action: onOpenConsistency) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
-                        todayTitle
+                HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                    titleBlock
 
-                        Spacer(minLength: AIscendTheme.Spacing.small)
+                    Spacer(minLength: AIscendTheme.Spacing.small)
 
-                        premiumPill
-                        streakCount
+                    streakCount
+                }
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                    HStack(alignment: .center) {
+                        Text("Weekly chain")
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+
+                        Spacer(minLength: 0)
+
+                        Text(checkedInToday ? "Locked" : "Open")
+                            .aiscendTextStyle(.caption, color: checkedInToday ? AIscendTheme.Colors.accentGlow : AIscendTheme.Colors.accentAmber)
                     }
 
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                        HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
-                            todayTitle
-                            Spacer(minLength: 0)
-                            streakCount
+                    HStack(alignment: .bottom, spacing: 0) {
+                        ForEach(weekDays) { day in
+                            DailyStreakDayMarker(day: day)
+                                .frame(maxWidth: .infinity)
                         }
-
-                        premiumPill
-                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-
-                HStack(alignment: .bottom, spacing: 0) {
-                    ForEach(weekDays) { day in
-                        DailyStreakDayMarker(day: day)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
+                .padding(AIscendTheme.Spacing.medium)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.white.opacity(0.055))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, AIscendTheme.Spacing.large)
-            .padding(.top, AIscendTheme.Spacing.large)
-            .padding(.bottom, AIscendTheme.Spacing.mediumLarge)
+            .padding(.vertical, AIscendTheme.Spacing.large)
             .background(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color(hex: "223149").opacity(0.98),
-                                Color(hex: "182236").opacity(0.98),
-                                Color(hex: "151C2C").opacity(0.98)
+                                Color(hex: "21143F").opacity(0.98),
+                                AIscendTheme.Colors.accentDeep.opacity(0.90),
+                                Color(hex: "120C22").opacity(0.98)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -68,8 +82,9 @@ struct DailyStreakSection: View {
                             .fill(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.07),
-                                        Color.clear
+                                        AIscendTheme.Colors.accentSoft.opacity(0.24),
+                                        Color.clear,
+                                        AIscendTheme.Colors.accentGlow.opacity(0.12)
                                     ],
                                     startPoint: .top,
                                     endPoint: .bottom
@@ -79,9 +94,9 @@ struct DailyStreakSection: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.22), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.30), radius: 18, x: 0, y: 14)
+            .shadow(color: AIscendTheme.Colors.accentDeep.opacity(0.24), radius: 22, x: 0, y: 14)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
@@ -91,57 +106,45 @@ struct DailyStreakSection: View {
         )
     }
 
-    private var todayTitle: some View {
-        HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
+    private var titleBlock: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xxSmall) {
             Text("Today")
                 .font(.system(size: 36, weight: .bold, design: .rounded))
                 .foregroundStyle(AIscendTheme.Colors.textPrimary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
 
-            Image(systemName: "chevron.down")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(AIscendTheme.Colors.textPrimary.opacity(0.92))
-                .offset(y: 2)
+            Text(statusTitle)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundStyle(AIscendTheme.Colors.textSecondary)
+                .lineLimit(1)
         }
-    }
-
-    private var premiumPill: some View {
-        HStack(spacing: AIscendTheme.Spacing.xSmall) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 14, weight: .bold))
-
-            Text("Go Premium")
-                .font(.system(size: 17, weight: .bold, design: .rounded))
-        }
-        .foregroundStyle(Color.black.opacity(0.92))
-        .padding(.horizontal, AIscendTheme.Spacing.large)
-        .padding(.vertical, AIscendTheme.Spacing.small)
-        .background(
-            Capsule(style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(hex: "FFD15B"),
-                            Color(hex: "FFE799")
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-        )
     }
 
     private var streakCount: some View {
-        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: checkedInToday ? "flame.fill" : "flame")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
             Text("\(liveStreakDays)")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .monospacedDigit()
 
-            Image(systemName: "bolt.fill")
-                .font(.system(size: 21, weight: .bold))
+            Text("days")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
         }
         .foregroundStyle(AIscendTheme.Colors.textPrimary)
+        .padding(.horizontal, AIscendTheme.Spacing.medium)
+        .padding(.vertical, AIscendTheme.Spacing.small)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.10))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AIscendTheme.Colors.accentGlow.opacity(0.24), lineWidth: 1)
+        )
     }
 }
 
@@ -204,17 +207,26 @@ private struct DailyStreakDayMarker: View {
         if day.isCompleted {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.88))
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.accentGlow,
+                                AIscendTheme.Colors.accentPrimary
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
 
                 Image(systemName: "checkmark")
                     .font(.system(size: 20, weight: .heavy, design: .rounded))
-                    .foregroundStyle(Color(hex: "20304A"))
+                    .foregroundStyle(.white)
             }
             .frame(width: 36, height: 36)
         } else if day.isToday {
             Circle()
                 .stroke(
-                    Color.white.opacity(0.86),
+                    AIscendTheme.Colors.accentGlow.opacity(0.9),
                     style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [7, 7])
                 )
                 .frame(width: 36, height: 36)

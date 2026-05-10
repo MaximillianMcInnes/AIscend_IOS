@@ -7,6 +7,7 @@ import SwiftUI
 
 struct ScanFlowCoordinatorView: View {
     let session: AuthSessionStore
+    let isPremium: Bool
     let onOpenRoutine: () -> Void
     let onOpenChat: () -> Void
     let onReturnHome: () -> Void
@@ -21,12 +22,14 @@ struct ScanFlowCoordinatorView: View {
         badgeManager: BadgeManager,
         dailyCheckInStore: DailyCheckInStore,
         notificationManager: NotificationManager,
+        isPremium: Bool = false,
         onOpenRoutine: @escaping () -> Void = {},
         onOpenChat: @escaping () -> Void = {},
         onReturnHome: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) {
         self.session = session
+        self.isPremium = isPremium
         self.onOpenRoutine = onOpenRoutine
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
@@ -42,6 +45,7 @@ struct ScanFlowCoordinatorView: View {
             badgeManager: badgeManager,
             dailyCheckInStore: dailyCheckInStore,
             notificationManager: notificationManager,
+            isPremium: isPremium,
             onOpenRoutine: onOpenRoutine,
             onOpenChat: onOpenChat,
             onReturnHome: onReturnHome,

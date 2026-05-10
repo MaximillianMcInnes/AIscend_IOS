@@ -17,6 +17,7 @@ struct RoutineDashboardView: View {
     @ObservedObject var hydrationStore: HydrationTrackingStore
     @ObservedObject var electrolyteStore: ElectrolyteTrackingStore
     @ObservedObject var badgeManager: BadgeManager
+    let isPremium: Bool
     @StateObject private var scanTrendStore = DashboardScanTrendStore()
     var onOpenAdvisor: () -> Void = {}
     var onOpenHydrationChat: (String) -> Void = { _ in }
@@ -25,7 +26,6 @@ struct RoutineDashboardView: View {
     var onOpenConsistency: () -> Void = {}
     var onOpenDailyPhoto: () -> Void = {}
     var onCaptureDailyPhoto: () -> Void = {}
-    var onOpenGlowUpTracker: () -> Void = {}
     var onOpenRoadmap: () -> Void = {}
     var onOpenScan: () -> Void = {}
     var onOpenAccount: () -> Void = {}
@@ -91,8 +91,29 @@ struct RoutineDashboardView: View {
         Self.dateFormatter.string(from: .now)
     }
 
-    private var projectedScore: Int {
-        min(snapshot.score + max(3, Int(snapshot.delta.rounded())), 99)
+    private var liveTrendModel: DashboardScanTrendModel? {
+        if case .loaded(let model) = scanTrendStore.phase {
+            return model
+        }
+
+        return nil
+    }
+
+    private var dashboardCurrentScore: Double {
+        liveTrendModel?.latestScore ?? Double(snapshot.score)
+    }
+
+    private var dashboardPredictedScore: Double {
+        liveTrendModel?.predictedScore
+            ?? DashboardScanTrendModel.fallback(from: snapshot).predictedScore
+    }
+
+    private var currentScoreDetail: String {
+        liveTrendModel == nil ? snapshot.tier : "Latest saved scan"
+    }
+
+    private var predictedScoreDetail: String {
+        liveTrendModel == nil ? "Projected path" : "Graph projection"
     }
 
     private var featuredDailyPhotoEntry: DailyPhotoEntry? {
@@ -184,12 +205,14 @@ struct RoutineDashboardView: View {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                     reportHeader
                     reportScoreRow
-                    optimizationBanner
 
-                    ChartSection(snapshot: snapshot, trendPhase: scanTrendStore.phase)
+                    ChartSection(
+                        snapshot: snapshot,
+                        trendPhase: scanTrendStore.phase,
+                        onOpenScan: onOpenScan
+                    )
 
                     roadmapWidget
-                    glowUpTrackerWidget
                     dailyPhotosAccessWidget
 
                     HydrationSection(
@@ -309,15 +332,15 @@ struct RoutineDashboardView: View {
             HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
                 reportMetricCard(
                     title: "Current score",
-                    value: "\(snapshot.score)",
-                    detail: snapshot.tier,
+                    value: scoreText(dashboardCurrentScore),
+                    detail: currentScoreDetail,
                     highlighted: false
                 )
 
                 reportMetricCard(
                     title: "Predicted score",
-                    value: "\(projectedScore)",
-                    detail: "Next cycle",
+                    value: scoreText(dashboardPredictedScore),
+                    detail: predictedScoreDetail,
                     highlighted: true
                 )
             }
@@ -325,112 +348,20 @@ struct RoutineDashboardView: View {
             VStack(spacing: AIscendTheme.Spacing.small) {
                 reportMetricCard(
                     title: "Current score",
-                    value: "\(snapshot.score)",
-                    detail: snapshot.tier,
+                    value: scoreText(dashboardCurrentScore),
+                    detail: currentScoreDetail,
                     highlighted: false
                 )
 
                 reportMetricCard(
                     title: "Predicted score",
-                    value: "\(projectedScore)",
-                    detail: "Next cycle",
+                    value: scoreText(dashboardPredictedScore),
+                    detail: predictedScoreDetail,
                     highlighted: true
                 )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var optimizationBanner: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
-
-                Text("Optimize up to +\(String(format: "%.1f", snapshot.delta)) pts")
-                    .font(.system(size: 21, weight: .semibold, design: .rounded))
-                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
-
-                Spacer(minLength: 0)
-
-                AIscendBadge(
-                    title: model.profile.focusTrack.title,
-                    symbol: model.profile.focusTrack.symbol,
-                    style: .accent
-                )
-            }
-
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    Image(systemName: "arrow.up.right")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(AIscendTheme.Colors.accentGlow)
-
-                    Text("Optimize up to +\(String(format: "%.1f", snapshot.delta)) pts")
-                        .font(.system(size: 21, weight: .semibold, design: .rounded))
-                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                }
-
-                AIscendBadge(
-                    title: model.profile.focusTrack.title,
-                    symbol: model.profile.focusTrack.symbol,
-                    style: .accent
-                )
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, AIscendTheme.Spacing.large)
-        .padding(.vertical, AIscendTheme.Spacing.mediumLarge)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-        )
-    }
-
-    private var glowUpTrackerWidget: some View {
-        DashboardGlassCard(tone: .premium) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        AIscendBadge(
-                            title: "What changed engine",
-                            symbol: "chart.xyaxis.line",
-                            style: .accent
-                        )
-
-                        Text("Glow-Up Tracker")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
-
-                        Text("Compare scans over time, review metric movement, and keep your progress archive private by default.")
-                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    AIscendIconOrb(symbol: "sparkles.rectangle.stack.fill", accent: .sky, size: 54)
-                }
-
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    glowUpMetaPill(title: "Archive", value: "Timeline", symbol: "rectangle.stack.fill")
-                    glowUpMetaPill(title: "Signal", value: "Deltas", symbol: "plus.forwardslash.minus")
-                }
-
-                Button(action: onOpenGlowUpTracker) {
-                    AIscendButtonLabel(
-                        title: "Open Glow-Up Tracker",
-                        leadingSymbol: "chart.line.uptrend.xyaxis"
-                    )
-                }
-                .buttonStyle(AIscendButtonStyle(variant: .primary))
-            }
-        }
     }
 
     private var roadmapWidget: some View {
@@ -500,54 +431,25 @@ struct RoutineDashboardView: View {
         )
     }
 
-    private func glowUpMetaPill(title: String, value: String, symbol: String) -> some View {
-        HStack(spacing: AIscendTheme.Spacing.small) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(AIscendTheme.Colors.accentGlow)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
-
-                Text(value)
-                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AIscendTheme.Spacing.medium)
-        .background(
-            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
-                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.58))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
-                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-        )
-    }
-
     private var dailyPhotosAccessWidget: some View {
         DashboardGlassCard(tone: .hero) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                     VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
                         AIscendBadge(
-                            title: dailyPhotoStore.hasPhotoToday ? "Today's photo captured" : "Today's photo open",
+                            title: dailyPhotoStore.hasPhotoToday ? "Captured today" : "Open today",
                             symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.seal.fill" : "camera.aperture",
                             style: .accent
                         )
 
                         Text("Today's photo")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
 
                         Text(dailyPhotoHeadline)
-                            .font(.system(size: 19, weight: .semibold, design: .rounded))
-                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text(dailyPhotoDetail)
-                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                            .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
@@ -563,33 +465,63 @@ struct RoutineDashboardView: View {
                             entry: featuredDailyPhotoEntry,
                             isTodayCaptured: dailyPhotoStore.hasPhotoToday
                         )
+                        .frame(width: 210)
 
-                        VStack(spacing: AIscendTheme.Spacing.small) {
-                            DailyPhotosWidgetMetaPill(
-                                title: "Saved",
-                                value: dailyPhotoArchiveLabel,
-                                symbol: "photo.stack.fill"
-                            )
-                            DailyPhotosWidgetMetaPill(
-                                title: "Run",
-                                value: "\(dailyPhotoStore.currentStreakDays())d",
-                                symbol: "sparkles.rectangle.stack.fill"
-                            )
-                            DailyPhotosWidgetMetaPill(
-                                title: "Status",
-                                value: dailyPhotoStatusLabel,
-                                symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.circle.fill" : "sun.max.fill"
-                            )
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                            Text(dailyPhotoDetail)
+                                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            VStack(spacing: AIscendTheme.Spacing.small) {
+                                DailyPhotosWidgetMetaPill(
+                                    title: "Saved",
+                                    value: dailyPhotoArchiveLabel,
+                                    symbol: "photo.stack.fill"
+                                )
+                                DailyPhotosWidgetMetaPill(
+                                    title: "Run",
+                                    value: "\(dailyPhotoStore.currentStreakDays())d",
+                                    symbol: "sparkles.rectangle.stack.fill"
+                                )
+                                DailyPhotosWidgetMetaPill(
+                                    title: "Status",
+                                    value: dailyPhotoStatusLabel,
+                                    symbol: dailyPhotoStore.hasPhotoToday ? "checkmark.circle.fill" : "sun.max.fill"
+                                )
+                            }
+
+                            HStack(spacing: AIscendTheme.Spacing.small) {
+                                Button(action: onCaptureDailyPhoto) {
+                                    AIscendButtonLabel(
+                                        title: dailyPhotoPrimaryActionTitle,
+                                        leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                                    )
+                                }
+                                .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                                Button(action: onOpenDailyPhoto) {
+                                    AIscendButtonLabel(
+                                        title: dailyPhotoSecondaryActionTitle,
+                                        leadingSymbol: "square.grid.2x2.fill"
+                                    )
+                                }
+                                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                            }
                         }
-                        .frame(width: 220)
                     }
 
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                         DailyPhotosWidgetPreviewCard(
                             store: dailyPhotoStore,
                             entry: featuredDailyPhotoEntry,
                             isTodayCaptured: dailyPhotoStore.hasPhotoToday
                         )
+                        .frame(maxWidth: 320)
+                        .frame(maxWidth: .infinity, alignment: .center)
+
+                        Text(dailyPhotoDetail)
+                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         HStack(spacing: AIscendTheme.Spacing.small) {
                             DailyPhotosWidgetMetaPill(
@@ -597,11 +529,15 @@ struct RoutineDashboardView: View {
                                 value: dailyPhotoArchiveLabel,
                                 symbol: "photo.stack.fill"
                             )
+                            .frame(maxWidth: .infinity)
+
                             DailyPhotosWidgetMetaPill(
                                 title: "Run",
                                 value: "\(dailyPhotoStore.currentStreakDays())d",
                                 symbol: "sparkles.rectangle.stack.fill"
                             )
+                            .frame(maxWidth: .infinity)
+
                             DailyPhotosWidgetMetaPill(
                                 title: "Status",
                                 value: dailyPhotoStatusLabel,
@@ -609,44 +545,24 @@ struct RoutineDashboardView: View {
                             )
                             .frame(maxWidth: .infinity)
                         }
-                    }
-                }
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onCaptureDailyPhoto) {
-                            AIscendButtonLabel(
-                                title: dailyPhotoPrimaryActionTitle,
-                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
-                            )
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .primary))
+                        VStack(spacing: AIscendTheme.Spacing.small) {
+                            Button(action: onCaptureDailyPhoto) {
+                                AIscendButtonLabel(
+                                    title: dailyPhotoPrimaryActionTitle,
+                                    leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
+                                )
+                            }
+                            .buttonStyle(AIscendButtonStyle(variant: .primary))
 
-                        Button(action: onOpenDailyPhoto) {
-                            AIscendButtonLabel(
-                                title: dailyPhotoSecondaryActionTitle,
-                                leadingSymbol: "square.grid.2x2.fill"
-                            )
+                            Button(action: onOpenDailyPhoto) {
+                                AIscendButtonLabel(
+                                    title: dailyPhotoSecondaryActionTitle,
+                                    leadingSymbol: "square.grid.2x2.fill"
+                                )
+                            }
+                            .buttonStyle(AIscendButtonStyle(variant: .secondary))
                         }
-                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
-                    }
-
-                    VStack(spacing: AIscendTheme.Spacing.small) {
-                        Button(action: onCaptureDailyPhoto) {
-                            AIscendButtonLabel(
-                                title: dailyPhotoPrimaryActionTitle,
-                                leadingSymbol: dailyPhotoStore.hasPhotoToday ? "camera.fill" : "camera.aperture"
-                            )
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .primary))
-
-                        Button(action: onOpenDailyPhoto) {
-                            AIscendButtonLabel(
-                                title: dailyPhotoSecondaryActionTitle,
-                                leadingSymbol: "square.grid.2x2.fill"
-                            )
-                        }
-                        .buttonStyle(AIscendButtonStyle(variant: .secondary))
                     }
                 }
             }
@@ -701,6 +617,10 @@ struct RoutineDashboardView: View {
                 .stroke(highlighted ? Color.white.opacity(0.14) : AIscendTheme.Colors.borderSubtle, lineWidth: 1)
         )
     }
+
+    private func scoreText(_ value: Double) -> String {
+        String(format: "%.1f", value)
+    }
 }
 
 private struct DailyPhotosWidgetMetaPill: View {
@@ -723,10 +643,13 @@ private struct DailyPhotosWidgetMetaPill: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+                    .lineLimit(1)
 
                 Text(value)
-                    .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.76)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -776,18 +699,6 @@ private struct DailyPhotosWidgetPreviewCard: View {
         return entry.ymd
     }
 
-    private var detail: String {
-        if isTodayCaptured {
-            return "Your photo is saved locally and ready for the archive."
-        }
-
-        if entry != nil {
-            return "Your latest frame stays here until you capture today's."
-        }
-
-        return "Open the in-app camera and save one photo to start the timeline."
-    }
-
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             surfaceShape
@@ -803,11 +714,11 @@ private struct DailyPhotosWidgetPreviewCard: View {
                 )
 
             if let entry, let url = store.imageURL(for: entry) {
-                AIscendCachedImage(localURL: url, maxPixelDimension: 900) {
+                AIscendCachedImage(localURL: url, maxPixelDimension: 900, contentMode: .fill) {
                     placeholderContent
                 }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
             } else {
                 placeholderContent
             }
@@ -828,15 +739,13 @@ private struct DailyPhotosWidgetPreviewCard: View {
                 Text(title)
                     .font(.system(size: 21, weight: .bold, design: .rounded))
                     .foregroundStyle(AIscendTheme.Colors.textPrimary)
-
-                Text(detail)
-                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
             .padding(AIscendTheme.Spacing.mediumLarge)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 176)
+        .aspectRatio(3.0 / 4.0, contentMode: .fit)
         .clipShape(surfaceShape)
         .overlay(
             surfaceShape
@@ -845,17 +754,29 @@ private struct DailyPhotosWidgetPreviewCard: View {
     }
 
     private var placeholderContent: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 48)
+        ZStack {
+            LinearGradient(
+                colors: [
+                    AIscendTheme.Colors.accentDeep.opacity(0.40),
+                    AIscendTheme.Colors.surfaceMuted.opacity(0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
 
-            Text("No photo yet")
-                .aiscendTextStyle(.cardTitle)
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 48)
 
-            Text("The first capture turns this panel into your daily visual check-in.")
-                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                Text("No photo yet")
+                    .aiscendTextStyle(.cardTitle)
+
+                Text("Save one clean frame to start the timeline.")
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+            .padding(AIscendTheme.Spacing.mediumLarge)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(AIscendTheme.Spacing.mediumLarge)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -877,6 +798,7 @@ private struct DailyPhotosWidgetPreviewCard: View {
         dailyPhotoStore: DailyPhotoStore(),
         hydrationStore: HydrationTrackingStore(),
         electrolyteStore: ElectrolyteTrackingStore(),
-        badgeManager: BadgeManager()
+        badgeManager: BadgeManager(),
+        isPremium: false
     )
 }

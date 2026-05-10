@@ -21,6 +21,7 @@ struct DashboardScanTrendModel {
     let points: [DashboardScanTrendPoint]
     let scanCount: Int
     let latestScore: Double
+    let latestScanDate: Date?
 
     var bestScore: Double {
         points.compactMap(\.actual).max() ?? latestScore
@@ -41,16 +42,25 @@ struct DashboardScanTrendModel {
             ?? highlightedScore
     }
 
+    var hasScanInLastMonth: Bool {
+        guard let latestScanDate else {
+            return false
+        }
+
+        let threshold = Calendar.current.date(byAdding: .month, value: -1, to: .now) ?? .now
+        return latestScanDate >= threshold
+    }
+
     static func fallback(from snapshot: DashboardSnapshot) -> DashboardScanTrendModel {
         let actualPoints = snapshot.trendPoints.map {
             DashboardScanTrendPoint(label: $0.label, actual: $0.score, predicted: nil)
         }
         let latestScore = Double(snapshot.score)
-        let target = min(95, latestScore + max(4, snapshot.delta * 1.45))
+        let target = min(98, latestScore + max(8, snapshot.delta * 2.15))
         let forecastLabels = ["+1m", "+2m", "+3m", "+4m", "+5m", "+6m"]
         let forecastPoints = forecastLabels.enumerated().map { index, label in
             let progress = Double(index + 1) / Double(forecastLabels.count)
-            let eased = 1 - pow(1 - progress, 1.45)
+            let eased = 1 - pow(1 - progress, 1.82)
             return DashboardScanTrendPoint(
                 label: label,
                 actual: nil,
@@ -61,7 +71,8 @@ struct DashboardScanTrendModel {
         return DashboardScanTrendModel(
             points: actualPoints + forecastPoints,
             scanCount: snapshot.scans.count,
-            latestScore: latestScore
+            latestScore: latestScore,
+            latestScanDate: nil
         )
     }
 }
@@ -182,7 +193,7 @@ private enum DashboardScanTrendBuilder {
 
     static func model(from scans: [DashboardRawScanPoint]) -> DashboardScanTrendModel? {
         let sortedScans = scans.sorted { $0.date < $1.date }
-        guard sortedScans.count >= 2, let firstScan = sortedScans.first, let lastScan = sortedScans.last else {
+        guard let firstScan = sortedScans.first, let lastScan = sortedScans.last else {
             return nil
         }
 
@@ -248,7 +259,8 @@ private enum DashboardScanTrendBuilder {
         return DashboardScanTrendModel(
             points: points,
             scanCount: sortedScans.count,
-            latestScore: lastActualValue
+            latestScore: lastActualValue,
+            latestScanDate: lastScan.date
         )
     }
 
@@ -384,13 +396,13 @@ private enum DashboardScanTrendBuilder {
     }
 
     private static func computeTarget(from lastScore: Double) -> Double {
-        let scaled = 85 + (lastScore - 50) * 0.25
-        return max(85, min(92, scaled))
+        let scaled = 90 + (lastScore - 50) * 0.32
+        return min(99, max(lastScore + 8, min(98, scaled)))
     }
 
     private static func applyUplift(_ value: Double, lastActual: Double, target: Double) -> Double {
-        let baseUplift = max(0.75, 0.1 * (target - lastActual))
-        return min(95, value + baseUplift)
+        let baseUplift = max(1.4, 0.18 * (target - lastActual))
+        return min(99, value + baseUplift)
     }
 }
 
@@ -403,8 +415,20 @@ private extension Array where Element == Double {
 struct ChartSection: View {
     let snapshot: DashboardSnapshot
     var trendPhase: DashboardScanTrendPhase = .idle
+    var onOpenScan: () -> Void = {}
 
     @State private var selectedRange: DashboardTrendRange = .yearly
+
+    private var rangeSelection: Binding<DashboardTrendRange> {
+        Binding(
+            get: { selectedRange },
+            set: { newValue in
+                withAnimation(.snappy(duration: 0.28)) {
+                    selectedRange = newValue
+                }
+            }
+        )
+    }
 
     private var liveTrendModel: DashboardScanTrendModel? {
         if case .loaded(let model) = trendPhase {
@@ -450,6 +474,11 @@ struct ChartSection: View {
             )
     }
 
+    private var displayedPredictedScore: Double {
+        displayedPoints.last(where: { $0.point.predicted != nil })?.point.predicted
+            ?? displayedHighlight.score
+    }
+
     private var minTrendValue: Double {
         let values = displayedPoints.flatMap { [$0.point.actual, $0.point.predicted].compactMap { $0 } }
         return max((values.min() ?? Double(snapshot.score)) - 4, 0)
@@ -464,7 +493,7 @@ struct ChartSection: View {
         if isLoading {
             ChartSectionSkeleton()
         } else if case .empty = trendPhase {
-            ChartSectionEmptyState()
+            ChartSectionEmptyState(onOpenScan: onOpenScan)
         } else {
             chartCard
         }
@@ -477,10 +506,9 @@ struct ChartSection: View {
                     Text(liveTrendModel == nil ? "Score / cycle" : "\(chartModel.scanCount) scans tracked")
                         .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
 
-                    Text(snapshot.heroStatement)
+                    Text("Scan trajectory")
                         .font(.system(size: 19, weight: .semibold, design: .rounded))
                         .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: AIscendTheme.Spacing.small)
@@ -500,6 +528,10 @@ struct ChartSection: View {
                     predictedScoreBlock
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+
+            if liveTrendModel?.hasScanInLastMonth == false {
+                recentScanPrompt
             }
 
             Chart {
@@ -568,6 +600,7 @@ struct ChartSection: View {
                 .symbolSize(90)
                 .foregroundStyle(Color.white)
             }
+            .id(selectedRange)
             .chartLegend(.hidden)
             .chartYAxis(.hidden)
             .chartXAxis {
@@ -624,7 +657,7 @@ struct ChartSection: View {
     }
 
     private var trendRangePicker: some View {
-        Picker("Trend range", selection: $selectedRange) {
+        Picker("Trend range", selection: rangeSelection) {
             ForEach(DashboardTrendRange.allCases) { range in
                 Text(range.title).tag(range)
             }
@@ -649,7 +682,7 @@ struct ChartSection: View {
                 Text("Predicted")
                     .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
 
-                Text(String(format: "%.1f", chartModel.predictedScore))
+                Text(String(format: "%.1f", displayedPredictedScore))
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(AIscendTheme.Colors.textPrimary)
@@ -667,6 +700,41 @@ struct ChartSection: View {
         )
     }
 
+    private var recentScanPrompt: some View {
+        Button(action: onOpenScan) {
+            HStack(spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Run a fresh monthly scan")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                    Text("Your latest saved scan is over a month old, so the forecast is optimistic until you refresh the data.")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+            }
+            .padding(AIscendTheme.Spacing.medium)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(AIscendTheme.Colors.accentPrimary.opacity(0.16))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.22), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Run a fresh monthly scan")
+    }
+
     private func monthlyPoints(from points: [DashboardScanTrendPoint]) -> [DashboardScanTrendPoint] {
         guard !points.isEmpty else {
             return []
@@ -675,8 +743,8 @@ struct ChartSection: View {
         let highlightIndex = points.lastIndex(where: { $0.actual != nil })
             ?? points.firstIndex(where: { $0.predicted != nil })
             ?? 0
-        let lowerBound = max(0, highlightIndex - 3)
-        let upperBound = min(points.count - 1, highlightIndex + 3)
+        let lowerBound = max(0, highlightIndex - 1)
+        let upperBound = min(points.count - 1, highlightIndex + 1)
 
         return Array(points[lowerBound...upperBound])
     }
@@ -691,17 +759,17 @@ struct ChartSection: View {
 }
 
 private enum DashboardTrendRange: String, CaseIterable, Identifiable {
-    case monthly
     case yearly
+    case monthly
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .monthly:
-            "Monthly"
         case .yearly:
-            "Yearly"
+            "Year"
+        case .monthly:
+            "Month"
         }
     }
 }
@@ -772,14 +840,28 @@ private struct ChartSectionSkeleton: View {
 }
 
 private struct ChartSectionEmptyState: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-            Text("No scans found")
-                .font(.system(size: 19, weight: .semibold, design: .rounded))
-                .foregroundStyle(AIscendTheme.Colors.textPrimary)
+    let onOpenScan: () -> Void
 
-            Text("Capture at least two scans to unlock your live progress trend.")
-                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+    var body: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+            HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: "camera.aperture", accent: .sky, size: 50)
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                    Text("No recent scan data")
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                    Text("Run a scan to anchor this graph to your saved scores and unlock a higher projection curve.")
+                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Button(action: onOpenScan) {
+                AIscendButtonLabel(title: "Start Scan", leadingSymbol: "camera.aperture")
+            }
+            .buttonStyle(AIscendButtonStyle(variant: .primary))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AIscendTheme.Spacing.large)

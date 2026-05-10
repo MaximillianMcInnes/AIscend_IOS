@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import Photos
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -28,6 +29,7 @@ struct ScanCapturePageView: View {
     @State private var isLoading = false
     @State private var showingCameraCapture = false
     @State private var cameraAlert: ScanPageCameraAlert?
+    @State private var photoImportAlert: ScanPagePhotoImportAlert?
 
     private var canUseCamera: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
@@ -139,7 +141,11 @@ struct ScanCapturePageView: View {
                                 .buttonStyle(AIscendButtonStyle(variant: .primary))
                             }
 
-                            PhotosPicker(selection: $pickerItem, matching: .images) {
+                            PhotosPicker(
+                                selection: $pickerItem,
+                                matching: .images,
+                                preferredItemEncoding: .compatible
+                            ) {
                                 AIscendButtonLabel(
                                     title: buttonTitle,
                                     leadingSymbol: "photo.badge.plus"
@@ -217,6 +223,13 @@ struct ScanCapturePageView: View {
                 )
             }
         }
+        .alert(item: $photoImportAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("Got it"))
+            )
+        }
         .onChange(of: pickerItem) { _, newValue in
             guard let newValue else { return }
             Task {
@@ -267,21 +280,17 @@ struct ScanCapturePageView: View {
         }
 
         do {
-            guard let data = try await item.loadTransferable(type: Data.self),
-                  let preparedImage = await UIImage.aiscendPreparedScanImage(from: data)
-            else {
-                await MainActor.run {
-                    isLoading = false
-                }
-                return
-            }
+            let preparedImage = try await ScanPhotoImportLoader.preparedScanImage(from: item)
 
             await MainActor.run {
                 finishImport(image: preparedImage.image, data: preparedImage.data)
+                pickerItem = nil
             }
         } catch {
             await MainActor.run {
                 isLoading = false
+                pickerItem = nil
+                photoImportAlert = ScanPagePhotoImportAlert(error: error)
             }
         }
     }
@@ -345,6 +354,130 @@ struct ScanCapturePageView: View {
     }
 }
 
+private enum ScanPhotoImportLoader {
+    static func preparedScanImage(from item: PhotosPickerItem) async throws -> (image: UIImage, data: Data) {
+        let data = try await bestAvailableImageData(from: item)
+
+        guard let preparedImage = await UIImage.aiscendPreparedScanImage(from: data) else {
+            throw ScanPhotoImportError.unsupportedFormat
+        }
+
+        return preparedImage
+    }
+
+    private static func bestAvailableImageData(from item: PhotosPickerItem) async throws -> Data {
+        var capturedError: Error?
+
+        if let localIdentifier = item.itemIdentifier {
+            do {
+                if let data = try await photoLibraryData(for: localIdentifier) {
+                    return data
+                }
+            } catch {
+                capturedError = error
+            }
+        }
+
+        do {
+            if let data = try await item.loadTransferable(type: Data.self) {
+                return data
+            }
+        } catch {
+            capturedError = error
+        }
+
+        if let capturedError {
+            throw ScanPhotoImportError.loadingFailed(capturedError)
+        }
+
+        throw ScanPhotoImportError.unavailable
+    }
+
+    private static func photoLibraryData(for localIdentifier: String) async throws -> Data? {
+        let fetchResult = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+
+        guard let asset = fetchResult.firstObject else {
+            return nil
+        }
+
+        let options = PHImageRequestOptions()
+        options.isNetworkAccessAllowed = true
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .none
+        options.version = .current
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+
+            func resume(_ result: Result<Data?, Error>) {
+                guard !didResume else { return }
+                didResume = true
+
+                switch result {
+                case .success(let data):
+                    continuation.resume(returning: data)
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            PHImageManager.default().requestImageDataAndOrientation(for: asset, options: options) { data, _, _, info in
+                if let isCancelled = info?[PHImageCancelledKey] as? Bool, isCancelled {
+                    resume(.failure(ScanPhotoImportError.unavailable))
+                    return
+                }
+
+                if let error = info?[PHImageErrorKey] as? Error {
+                    resume(.failure(error))
+                    return
+                }
+
+                if let isDegraded = info?[PHImageResultIsDegradedKey] as? Bool, isDegraded, data == nil {
+                    return
+                }
+
+                resume(.success(data))
+            }
+        }
+    }
+}
+
+private enum ScanPhotoImportError: LocalizedError {
+    case unavailable
+    case unsupportedFormat
+    case loadingFailed(Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable:
+            return "AIScend could not load that photo."
+        case .unsupportedFormat:
+            return "That photo format is not supported."
+        case .loadingFailed(let error):
+            return error.localizedDescription
+        }
+    }
+}
+
+private struct ScanPagePhotoImportAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+
+    init(error: Error) {
+        title = "Photo Could Not Load"
+
+        let rawMessage = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallback = "AIScend could not download this image from Photos. If it is stored in iCloud, open it in Photos first so it finishes downloading, or take a new photo inside AIScend."
+
+        if rawMessage.isEmpty || rawMessage == "The operation couldn’t be completed." {
+            message = fallback
+        } else {
+            message = "\(rawMessage)\n\n\(fallback)"
+        }
+    }
+}
+
 private enum ScanPageCameraAlert: Int, Identifiable {
     case unavailable
     case denied
@@ -379,6 +512,8 @@ private struct ScanFaceGuidePlaceholder: View {
             ZStack {
                 ScanGuideGrid()
                     .stroke(Color.black.opacity(0.10), lineWidth: 1)
+
+                ScanGuideLandmarks(guide: guide)
 
                 ScanFaceGuideShape(guide: guide)
                     .stroke(
@@ -416,6 +551,50 @@ private struct ScanFaceGuidePlaceholder: View {
     }
 }
 
+private struct ScanGuideLandmarks: View {
+    let guide: ScanCaptureGuide
+
+    private var points: [CGPoint] {
+        switch guide {
+        case .front:
+            return [
+                CGPoint(x: 0.38, y: 0.39),
+                CGPoint(x: 0.62, y: 0.39),
+                CGPoint(x: 0.50, y: 0.50),
+                CGPoint(x: 0.42, y: 0.58),
+                CGPoint(x: 0.58, y: 0.58),
+                CGPoint(x: 0.50, y: 0.67),
+                CGPoint(x: 0.33, y: 0.53),
+                CGPoint(x: 0.67, y: 0.53)
+            ]
+        case .side:
+            return [
+                CGPoint(x: 0.45, y: 0.22),
+                CGPoint(x: 0.60, y: 0.36),
+                CGPoint(x: 0.72, y: 0.47),
+                CGPoint(x: 0.62, y: 0.56),
+                CGPoint(x: 0.48, y: 0.70),
+                CGPoint(x: 0.35, y: 0.55)
+            ]
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                Circle()
+                    .fill(AIscendTheme.Colors.accentGlow.opacity(0.66))
+                    .frame(width: 7, height: 7)
+                    .position(
+                        x: geometry.size.width * point.x,
+                        y: geometry.size.height * point.y
+                    )
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 private struct ScanGuideGrid: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -426,6 +605,10 @@ private struct ScanGuideGrid: Shape {
         path.addLine(to: CGPoint(x: centerX, y: rect.maxY - rect.height * 0.08))
         path.move(to: CGPoint(x: rect.minX + rect.width * 0.12, y: centerY))
         path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.12, y: centerY))
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.22, y: rect.minY + rect.height * 0.32))
+        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.22, y: rect.minY + rect.height * 0.32))
+        path.move(to: CGPoint(x: rect.minX + rect.width * 0.24, y: rect.minY + rect.height * 0.68))
+        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.24, y: rect.minY + rect.height * 0.68))
 
         return path
     }

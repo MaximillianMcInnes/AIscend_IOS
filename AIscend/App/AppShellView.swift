@@ -19,9 +19,29 @@ struct AppShellView: View {
 }
 
 private enum RoutineWorkspaceTab: String, CaseIterable, Identifiable {
+    case routine
+    case exercises
+    case tracking
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .routine:
+            "Routine"
+        case .exercises:
+            "Exercises"
+        case .tracking:
+            "Tracking"
+        }
+    }
+}
+
+private enum RoutinePlanTab: String, CaseIterable, Identifiable {
     case daily
-    case plan
-    case trackers
+    case skinCare
+    case weekly
+    case leaderboard
 
     var id: String { rawValue }
 
@@ -29,26 +49,31 @@ private enum RoutineWorkspaceTab: String, CaseIterable, Identifiable {
         switch self {
         case .daily:
             "Daily"
-        case .plan:
-            "Plan"
-        case .trackers:
-            "Hydration"
+        case .skinCare:
+            "Skin Care"
+        case .weekly:
+            "Weekly"
+        case .leaderboard:
+            "Leaderboard"
         }
     }
 }
 
 private enum RoutineTrackerTab: String, CaseIterable, Identifiable {
-    case water
+    case hydration
     case electrolytes
+    case calories
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .water:
-            "Water"
+        case .hydration:
+            "Hydration"
         case .electrolytes:
             "Electrolytes"
+        case .calories:
+            "Calories"
         }
     }
 }
@@ -65,8 +90,9 @@ struct RoutineCleanSlateView: View {
     let onOpenNutrition: () -> Void
     let onRefine: () -> Void
 
-    @State private var selectedTab: RoutineWorkspaceTab = .daily
-    @State private var selectedTrackerTab: RoutineTrackerTab = .water
+    @State private var selectedTab: RoutineWorkspaceTab = .routine
+    @State private var selectedRoutinePlanTab: RoutinePlanTab = .daily
+    @State private var selectedTrackerTab: RoutineTrackerTab = .hydration
     @State private var showingJawTraining = false
     @StateObject private var jawTrainingStore = JawTrainingStore()
 
@@ -145,7 +171,7 @@ struct RoutineCleanSlateView: View {
                 }
             }
 
-            Text("A calmer routine surface with one tab for execution, one for planning, and one for health tracking.")
+            Text("Daily execution, facial exercise planning, and health tracking in one calmer routine workspace.")
                 .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
         }
     }
@@ -175,17 +201,30 @@ struct RoutineCleanSlateView: View {
 
     @ViewBuilder
     private var selectedRoutineContent: some View {
-        routineHero
-        nutritionEntryCard
-        jawTrainingEntryCard
-
         switch selectedTab {
+        case .routine:
+            routineHero
+            RoutinePlanToggle(selection: $selectedRoutinePlanTab)
+            selectedRoutinePlanContent
+        case .exercises:
+            exerciseRoutinePlaceholderTab
+        case .tracking:
+            routineHero
+            trackersTab
+        }
+    }
+
+    @ViewBuilder
+    private var selectedRoutinePlanContent: some View {
+        switch selectedRoutinePlanTab {
         case .daily:
             dailyRoutineTab
-        case .plan:
-            planTab
-        case .trackers:
-            trackersTab
+        case .skinCare:
+            skinCareRoutineTab
+        case .weekly:
+            weeklyRoutineTab
+        case .leaderboard:
+            leaderboardComingSoonTab
         }
     }
 
@@ -412,33 +451,33 @@ struct RoutineCleanSlateView: View {
 
     private var routineHeroEyebrow: String {
         switch selectedTab {
-        case .daily:
+        case .routine:
             "Today's progress"
-        case .plan:
-            "Your operating plan"
-        case .trackers:
-            "Hydration"
+        case .exercises:
+            "Facial exercise"
+        case .tracking:
+            selectedTrackerTab.title
         }
     }
 
     private var routineHeroTitle: String {
         switch selectedTab {
-        case .daily:
+        case .routine:
             "\(model.completedRoutineCount)/\(max(model.totalRoutineCount, 1)) complete"
-        case .plan:
-            model.profile.focusTrack.title
-        case .trackers:
+        case .exercises:
+            "Routine builder coming soon"
+        case .tracking:
             hydrationHeroTitle
         }
     }
 
     private var routineHeroDetail: String {
         switch selectedTab {
-        case .daily:
+        case .routine:
             model.nextOpenStep?.detail ?? "Everything is handled. Keep the streak protected and close the day cleanly."
-        case .plan:
-            model.profile.intention
-        case .trackers:
+        case .exercises:
+            "A guided facial exercise routine space is being staged for jaw, posture, and tension work."
+        case .tracking:
             hydrationHeroDetail
         }
     }
@@ -519,6 +558,92 @@ struct RoutineCleanSlateView: View {
         }
     }
 
+    private var skinCareRoutineTab: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            AIscendEditorialHeroCard(
+                eyebrow: "Skin Care",
+                title: "Daily skin support",
+                subtitle: "A simple AM and PM care layer for consistency, texture support, and recovery without overloading the routine.",
+                accent: .mint
+            ) {
+                VStack(spacing: AIscendTheme.Spacing.small) {
+                    routineCareRow(title: "Morning cleanse", detail: "Reset oil and sleep buildup before the day starts.", symbol: "drop.fill", accent: .sky)
+                    routineCareRow(title: "Moisturizer", detail: "Keep the barrier supported before training or outdoor time.", symbol: "sparkles", accent: .mint)
+                    routineCareRow(title: "SPF check", detail: "Protect progress from UV exposure and texture drift.", symbol: "sun.max.fill", accent: .dawn)
+                    routineCareRow(title: "Evening reset", detail: "Cleanse, calm, and let the skin recover overnight.", symbol: "moon.stars.fill", accent: .sky)
+                }
+            }
+        }
+    }
+
+    private var weeklyRoutineTab: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            AIscendEditorialHeroCard(
+                eyebrow: "Weekly",
+                title: "Plan the bigger rhythm",
+                subtitle: "Use the weekly layer for lower-frequency care, progress review, and recovery choices that do not need to be daily chores.",
+                accent: .dawn
+            ) {
+                VStack(spacing: AIscendTheme.Spacing.small) {
+                    routineCareRow(title: "Progress photo review", detail: "Compare lighting, angles, and notes once a week.", symbol: "photo.on.rectangle.angled", accent: .sky)
+                    routineCareRow(title: "De-puff reset", detail: "Pick one lower-sodium, higher-potassium day if the week ran heavy.", symbol: "leaf.fill", accent: .mint)
+                    routineCareRow(title: "Routine tune-up", detail: "Adjust your anchors around what actually happened this week.", symbol: "slider.horizontal.3", accent: .dawn)
+                }
+            }
+
+            VStack(spacing: AIscendTheme.Spacing.small) {
+                Button(action: onOpenCheckIn) {
+                    AIscendButtonLabel(
+                        title: dailyCheckInStore.hasCheckedInToday ? "Review Daily Check-In" : "Complete Daily Check-In",
+                        leadingSymbol: "calendar.badge.checkmark"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+                Button(action: onRefine) {
+                    AIscendButtonLabel(title: "Refine Plan", leadingSymbol: "slider.horizontal.3")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .secondary))
+            }
+        }
+    }
+
+    private var leaderboardComingSoonTab: some View {
+        RoutineComingSoonCard(
+            eyebrow: "Leaderboard",
+            title: "Leaderboard coming soon",
+            subtitle: "A low-pressure XP board for consistency, streaks, and routine completion is being prepared.",
+            symbol: "trophy.fill",
+            accent: .dawn
+        )
+    }
+
+    private var exerciseRoutinePlaceholderTab: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            RoutineComingSoonCard(
+                eyebrow: "Exercises",
+                title: "Facial exercise routine",
+                subtitle: "A guided placeholder for jaw relaxation, tongue posture, neck alignment, and facial tension work.",
+                symbol: "face.smiling.inverse",
+                accent: .sky
+            )
+
+            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                AIscendSectionHeader(
+                    eyebrow: "Preview",
+                    title: "Routine structure",
+                    subtitle: "The final flow will keep exercise short, safe, and repeatable."
+                )
+
+                routineCareRow(title: "Warm-up", detail: "Gentle neck and jaw mobility before any hold.", symbol: "wind", accent: .sky)
+                routineCareRow(title: "Posture set", detail: "Tongue posture, shoulder position, and nasal breathing cues.", symbol: "figure.mind.and.body", accent: .mint)
+                routineCareRow(title: "Tension release", detail: "Masseter and temple relaxation work with safety limits.", symbol: "waveform.path.ecg", accent: .dawn)
+            }
+            .padding(AIscendTheme.Spacing.large)
+            .aiscendPanel(.elevated)
+        }
+    }
+
     private var planTab: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
             AIscendEditorialHeroCard(
@@ -594,6 +719,8 @@ struct RoutineCleanSlateView: View {
 
     private var trackersTab: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+            RoutineTrackerToggle(selection: $selectedTrackerTab)
+
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: AIscendTheme.Spacing.small) {
                     RoutineSlateMetric(
@@ -628,41 +755,44 @@ struct RoutineCleanSlateView: View {
                 }
             }
 
-            HydrationTrackingView(
-                store: hydrationStore,
-                electrolyteStore: electrolyteStore,
-                onOpenChat: onOpenHydrationChat
-            )
+            switch selectedTrackerTab {
+            case .hydration:
+                hydrationTrackerCard
+            case .electrolytes:
+                electrolyteTrackerCard
+            case .calories:
+                caloriesComingSoonCard
+            }
         }
     }
 
-    private var waterTrackerCard: some View {
+    private var hydrationTrackerCard: some View {
         RoutineTrackerDetailCard(
-            eyebrow: "Water",
-            title: "\(model.trackerState.waterIntake) of \(model.trackerState.waterGoal) cups",
-            subtitle: "Log each glass so hydration is visible instead of becoming a vague intention.",
+            eyebrow: "Hydration",
+            title: "\(HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true)) logged",
+            subtitle: hydrationWaterSummary.shortInsight,
             accent: .mint,
-            progress: trackerProgress(model.trackerState.waterIntake, goal: model.trackerState.waterGoal),
-            progressLabel: "\(max(model.trackerState.waterGoal - model.trackerState.waterIntake, 0)) cups remaining",
+            progress: hydrationWaterSummary.progress,
+            progressLabel: "Target \(HydrationTrackingEngine.formatWater(hydrationWaterSummary.targetWaterMl, prefersCompact: true))",
             stats: [
-                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.waterIntake) cups", symbol: "drop.fill", accent: .mint),
-                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.waterGoal) cups", symbol: "target", accent: .sky),
-                RoutineTrackerStat(title: "Streak", value: "\(model.habitStreak(for: "water")) days", symbol: "flame.fill", accent: .dawn)
+                RoutineTrackerStat(title: "Logged", value: HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true), symbol: "drop.fill", accent: .mint),
+                RoutineTrackerStat(title: "Status", value: hydrationWaterSummary.hydrationState.title, symbol: "gauge.with.dots.needle.50percent", accent: .sky),
+                RoutineTrackerStat(title: "Entries", value: "\(hydrationWaterSummary.entries.count)", symbol: "list.bullet.clipboard.fill", accent: .dawn)
             ],
             actions: [
                 RoutineTrackerAction(
-                    id: "water-minus",
-                    title: "Remove 1 Cup",
+                    id: "hydration-remove",
+                    title: "Remove Last Log",
                     symbol: "minus",
                     variant: .secondary,
-                    action: { model.adjustWaterIntake(by: -1) }
+                    action: { hydrationStore.removeLastEntry() }
                 ),
                 RoutineTrackerAction(
-                    id: "water-plus",
-                    title: "Add 1 Cup",
+                    id: "hydration-plus",
+                    title: "Add 250 ml",
                     symbol: "plus",
                     variant: .primary,
-                    action: { model.adjustWaterIntake(by: 1) }
+                    action: { hydrationStore.addWater(amountMl: 250, sourceName: "Routine quick add") }
                 )
             ]
         )
@@ -671,65 +801,53 @@ struct RoutineCleanSlateView: View {
     private var electrolyteTrackerCard: some View {
         RoutineTrackerDetailCard(
             eyebrow: "Electrolytes",
-            title: "\(model.trackerState.electrolyteIntake) of \(model.trackerState.electrolyteGoal) servings",
-            subtitle: "Track your electrolyte intake so hydration quality stays visible, not just total water.",
+            title: hydrationElectrolyteSummary.balanceState.title,
+            subtitle: hydrationElectrolyteSummary.shortInsight,
             accent: .dawn,
-            progress: trackerProgress(model.trackerState.electrolyteIntake, goal: model.trackerState.electrolyteGoal),
-            progressLabel: "\(max(model.trackerState.electrolyteGoal - model.trackerState.electrolyteIntake, 0)) servings remaining",
+            progress: electrolyteProgress,
+            progressLabel: "\(hydrationElectrolyteSummary.entries.count) logs today",
             stats: [
-                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.electrolyteIntake) servings", symbol: "bolt.heart.fill", accent: .dawn),
-                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.electrolyteGoal) servings", symbol: "target", accent: .sky),
-                RoutineTrackerStat(title: "Streak", value: "\(model.habitStreak(for: "electrolytes")) days", symbol: "flame.fill", accent: .mint)
+                RoutineTrackerStat(title: "Sodium", value: "\(hydrationElectrolyteSummary.totalSodiumMg) mg", symbol: "bolt.heart.fill", accent: .dawn),
+                RoutineTrackerStat(title: "Potassium", value: "\(hydrationElectrolyteSummary.totalPotassiumMg) mg", symbol: "leaf.fill", accent: .mint),
+                RoutineTrackerStat(title: "Magnesium", value: "\(hydrationElectrolyteSummary.totalMagnesiumMg) mg", symbol: "capsule.fill", accent: .sky)
             ],
-            actions: [
-                RoutineTrackerAction(
-                    id: "electrolytes-minus",
-                    title: "Remove 1 Serving",
-                    symbol: "minus",
-                    variant: .secondary,
-                    action: { model.adjustElectrolyteIntake(by: -1) }
-                ),
-                RoutineTrackerAction(
-                    id: "electrolytes-plus",
-                    title: "Add 1 Serving",
-                    symbol: "plus",
-                    variant: .primary,
-                    action: { model.adjustElectrolyteIntake(by: 1) }
-                )
-            ]
+            actions: electrolyteQuickActions
         )
     }
 
-    private var exerciseTrackerCard: some View {
-        RoutineTrackerDetailCard(
-            eyebrow: "Exercise",
-            title: "\(model.trackerState.exerciseMinutes) min logged",
-            subtitle: "Use this tab to keep movement visible even when the rest of the day gets noisy.",
-            accent: .sky,
-            progress: trackerProgress(model.trackerState.exerciseMinutes, goal: model.trackerState.exerciseGoalMinutes),
-            progressLabel: "\(max(model.trackerState.exerciseGoalMinutes - model.trackerState.exerciseMinutes, 0)) min remaining",
-            stats: [
-                RoutineTrackerStat(title: "Logged", value: "\(model.trackerState.exerciseMinutes) min", symbol: "figure.run", accent: .sky),
-                RoutineTrackerStat(title: "Target", value: "\(model.trackerState.exerciseGoalMinutes) min", symbol: "target", accent: .mint),
-                RoutineTrackerStat(title: "Status", value: model.trackerState.exerciseMinutes >= model.trackerState.exerciseGoalMinutes ? "Goal hit" : "Still moving", symbol: "bolt.fill", accent: .dawn)
-            ],
-            actions: [
-                RoutineTrackerAction(
-                    id: "exercise-minus",
-                    title: "Remove 5 Min",
-                    symbol: "minus",
-                    variant: .secondary,
-                    action: { model.adjustExerciseMinutes(by: -5) }
-                ),
-                RoutineTrackerAction(
-                    id: "exercise-plus",
-                    title: "Add 15 Min",
-                    symbol: "plus",
-                    variant: .primary,
-                    action: { model.adjustExerciseMinutes(by: 15) }
-                )
-            ]
+    private var caloriesComingSoonCard: some View {
+        RoutineComingSoonCard(
+            eyebrow: "Calories",
+            title: "Calories coming soon",
+            subtitle: "Calories will return as a dedicated nutrition tracker once the food logging flow is ready for this tab.",
+            symbol: "fork.knife.circle.fill",
+            accent: .dawn
         )
+    }
+
+    private var electrolyteProgress: Double {
+        switch hydrationElectrolyteSummary.balanceState {
+        case .balanced:
+            1
+        case .moderate:
+            0.66
+        case .low, .lowSodiumHighWater, .highSodiumLowPotassium:
+            0.38
+        case .unknown:
+            0.08
+        }
+    }
+
+    private var electrolyteQuickActions: [RoutineTrackerAction] {
+        Array(electrolyteStore.presets.prefix(2)).enumerated().map { index, preset in
+            RoutineTrackerAction(
+                id: "electrolyte-\(preset.id)",
+                title: "Add \(preset.title)",
+                symbol: preset.iconName,
+                variant: index == 0 ? .primary : .secondary,
+                action: { electrolyteStore.addPreset(preset) }
+            )
+        }
     }
 
     private var calorieProgressLabel: String {
@@ -811,6 +929,33 @@ struct RoutineCleanSlateView: View {
         .buttonStyle(.plain)
     }
 
+    private func routineCareRow(title: String, detail: String, symbol: String, accent: RoutineAccent) -> some View {
+        HStack(spacing: AIscendTheme.Spacing.medium) {
+            AIscendIconOrb(symbol: symbol, accent: accent, size: 38)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(AIscendTheme.Colors.textPrimary)
+
+                Text(detail)
+                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .background(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.72))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(accent.tint.opacity(0.18), lineWidth: 1)
+        )
+    }
+
     private func xpRewardLabel(for stepID: String) -> Int {
         switch stepID {
         case "mission", "pace":
@@ -838,9 +983,11 @@ private struct RoutineWorkspaceToggle: View {
                 } label: {
                     Text(tab.title)
                         .aiscendTextStyle(.caption, color: selection == tab ? .white : AIscendTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .padding(.horizontal, AIscendTheme.Spacing.xxSmall)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(
@@ -853,6 +1000,55 @@ private struct RoutineWorkspaceToggle: View {
                             Capsule(style: .continuous)
                                 .stroke(
                                     selection == tab ? AIscendTheme.Colors.accentGlow.opacity(0.5) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.black.opacity(0.24))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+        )
+    }
+}
+
+private struct RoutinePlanToggle: View {
+    @Binding var selection: RoutinePlanTab
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(RoutinePlanTab.allCases) { tab in
+                Button {
+                    withAnimation(AIscendTheme.Motion.reveal) {
+                        selection = tab
+                    }
+                } label: {
+                    Text(tab.title)
+                        .aiscendTextStyle(.caption, color: selection == tab ? .white : AIscendTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
+                        .padding(.horizontal, AIscendTheme.Spacing.xxSmall)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(
+                                    selection == tab
+                                        ? AnyShapeStyle(RoutineAccent.mint.gradient)
+                                        : AnyShapeStyle(Color.clear)
+                                )
+                        )
+                        .overlay(
+                            Capsule(style: .continuous)
+                                .stroke(
+                                    selection == tab ? AIscendTheme.Colors.accentGlow.opacity(0.46) : Color.clear,
                                     lineWidth: 1
                                 )
                         )
@@ -885,9 +1081,11 @@ private struct RoutineTrackerToggle: View {
                 } label: {
                     Text(tab.title)
                         .aiscendTextStyle(.caption, color: selection == tab ? .white : AIscendTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .padding(.horizontal, AIscendTheme.Spacing.xxSmall)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(
@@ -1007,6 +1205,47 @@ private struct RoutineTrackerDetailCard: View {
                         .buttonStyle(AIscendButtonStyle(variant: action.variant))
                     }
                 }
+            }
+        }
+    }
+}
+
+private struct RoutineComingSoonCard: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let symbol: String
+    let accent: RoutineAccent
+
+    var body: some View {
+        AIscendEditorialHeroCard(
+            eyebrow: eyebrow,
+            title: title,
+            subtitle: subtitle,
+            accent: accent
+        ) {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .fill(accent.gradient.opacity(0.22))
+                        .frame(width: 64, height: 64)
+
+                    Image(systemName: symbol)
+                        .font(.system(size: 25, weight: .semibold))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                }
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                    AIscendBadge(title: "Coming soon", symbol: "clock.fill", style: .neutral)
+
+                    Text("Preview mode")
+                        .aiscendTextStyle(.cardTitle)
+
+                    Text("The space is ready for the finished flow without making the feature feel live too early.")
+                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                }
+
+                Spacer(minLength: 0)
             }
         }
     }

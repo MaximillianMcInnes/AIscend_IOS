@@ -345,7 +345,7 @@ struct AIscendChatConfiguration {
         apiBaseURL: urlValue(for: ["API_BASE_URL", "AISCEND_API_BASE_URL"]),
         backendBaseURL: urlValue(for: ["RAG_BASE_URL", "AISCEND_RAG_BASE_URL", "AISCEND_CHATBOT_API_URL", "AISCEND_API_BASE_URL"]),
         premiumURL: urlValue(for: "AISCEND_PREMIUM_URL"),
-        scanAnalyzePath: stringValue(for: "AISCEND_SCAN_ANALYZE_PATH") ?? "scan/analyze",
+        scanAnalyzePath: stringValue(for: "AISCEND_SCAN_ANALYZE_PATH") ?? "api/face_scan",
         chatCollectionCandidates: uniqueValues(
             [
                 stringValue(for: "AISCEND_CHAT_COLLECTION"),

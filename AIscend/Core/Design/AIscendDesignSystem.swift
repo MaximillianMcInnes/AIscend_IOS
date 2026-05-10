@@ -1041,6 +1041,7 @@ struct AIscendCachedImage<Placeholder: View>: View {
     let localURL: URL?
     let remoteURL: URL?
     let maxPixelDimension: CGFloat
+    let contentMode: ContentMode
     @ViewBuilder let placeholder: Placeholder
 
     @State private var image: UIImage?
@@ -1053,11 +1054,13 @@ struct AIscendCachedImage<Placeholder: View>: View {
         localURL: URL? = nil,
         remoteURL: URL? = nil,
         maxPixelDimension: CGFloat = 900,
+        contentMode: ContentMode = .fill,
         @ViewBuilder placeholder: () -> Placeholder
     ) {
         self.localURL = localURL
         self.remoteURL = remoteURL
         self.maxPixelDimension = maxPixelDimension
+        self.contentMode = contentMode
         self.placeholder = placeholder()
     }
 
@@ -1066,7 +1069,7 @@ struct AIscendCachedImage<Placeholder: View>: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFill()
+                    .aspectRatio(contentMode: contentMode)
             } else {
                 placeholder
             }
