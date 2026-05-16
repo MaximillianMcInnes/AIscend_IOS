@@ -97,6 +97,7 @@ API_URL="$(first_value "$(plist_value API_BASE_URL)" "$(plist_value AISCEND_API_
 RAG_URL="$(first_value "$(plist_value RAG_BASE_URL)" "$(plist_value AISCEND_RAG_BASE_URL)" "$(plist_value AISCEND_CHATBOT_API_URL)" "$(first_dotenv_value RAG_BASE_URL AISCEND_RAG_BASE_URL AISCEND_CHATBOT_API_URL NEXT_PUBLIC_CHATBOT_API_URL)")"
 SCAN_ANALYZE_PATH="$(first_value "$(plist_value AISCEND_SCAN_ANALYZE_PATH)" "$(first_dotenv_value AISCEND_SCAN_ANALYZE_PATH)")"
 SCAP_API_URL="$(first_value "$(plist_value AISCEND_SCAP_API_URL)" "$(first_dotenv_value AISCEND_SCAP_API_URL NEXT_PUBLIC_SCAP_API_URL)")"
+SUPERWALL_API_KEY="$(first_value "$(plist_value SUPERWALL_API_KEY)" "$(plist_value AISCEND_SUPERWALL_API_KEY)" "$(first_dotenv_value SUPERWALL_API_KEY AISCEND_SUPERWALL_API_KEY NEXT_PUBLIC_SUPERWALL_API_KEY)")"
 
 set_plist_string API_BASE_URL "${API_URL}"
 set_plist_string RAG_BASE_URL "${RAG_URL}"
@@ -105,3 +106,5 @@ set_plist_string AISCEND_CHATBOT_API_URL "${RAG_URL}"
 set_plist_string AISCEND_RAG_BASE_URL "${RAG_URL}"
 set_plist_string AISCEND_SCAN_ANALYZE_PATH "${SCAN_ANALYZE_PATH}"
 set_plist_string AISCEND_SCAP_API_URL "${SCAP_API_URL}"
+set_plist_string SUPERWALL_API_KEY "${SUPERWALL_API_KEY}"
+set_plist_string AISCEND_SUPERWALL_API_KEY "${SUPERWALL_API_KEY}"

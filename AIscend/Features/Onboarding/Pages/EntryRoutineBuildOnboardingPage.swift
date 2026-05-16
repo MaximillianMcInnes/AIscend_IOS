@@ -12,6 +12,8 @@ struct EntryRoutineBuildOnboardingPage: View {
 
     @State private var ringsVisible = false
     @State private var stepsVisible = false
+    @State private var orbitRotates = false
+    @State private var sparklePulse = false
     @State private var buildProgress: Double = 0
     @State private var activeStep = 0
     @State private var buildTask: Task<Void, Never>?
@@ -61,11 +63,21 @@ struct EntryRoutineBuildOnboardingPage: View {
                 isComplete = false
                 ringsVisible = false
                 stepsVisible = false
+                orbitRotates = false
+                sparklePulse = false
                 buildProgress = 0
                 activeStep = 0
 
                 withAnimation(.easeInOut(duration: 1.7).repeatForever(autoreverses: true)) {
                     ringsVisible = true
+                }
+
+                withAnimation(.linear(duration: 5.2).repeatForever(autoreverses: false)) {
+                    orbitRotates = true
+                }
+
+                withAnimation(.easeInOut(duration: 0.86).repeatForever(autoreverses: true)) {
+                    sparklePulse = true
                 }
 
                 withAnimation(.smooth(duration: 0.1).delay(0.18)) {
@@ -83,6 +95,25 @@ struct EntryRoutineBuildOnboardingPage: View {
 
     private var routineOrb: some View {
         ZStack {
+            Circle()
+                .trim(from: 0, to: max(buildProgress, 0.04))
+                .stroke(
+                    AngularGradient(
+                        colors: [
+                            EntryOnboardingStyle.purpleSoft,
+                            .white.opacity(0.88),
+                            EntryOnboardingStyle.purple,
+                            EntryOnboardingStyle.purpleSoft
+                        ],
+                        center: .center
+                    ),
+                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                )
+                .frame(width: 194, height: 194)
+                .rotationEffect(.degrees(-90))
+                .shadow(color: EntryOnboardingStyle.purpleSoft.opacity(0.36), radius: 18)
+                .animation(.spring(response: 0.42, dampingFraction: 0.82), value: buildProgress)
+
             ForEach(0..<3, id: \.self) { ring in
                 Circle()
                     .stroke(
@@ -92,6 +123,16 @@ struct EntryRoutineBuildOnboardingPage: View {
                     .frame(width: CGFloat(132 + ring * 30), height: CGFloat(132 + ring * 30))
                     .scaleEffect(ringsVisible ? 1 + CGFloat(ring) * 0.025 : 0.96)
                     .opacity(ringsVisible ? 1 : 0.58)
+            }
+
+            ForEach(0..<6, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(index.isMultiple(of: 2) ? EntryOnboardingStyle.purpleSoft : .white.opacity(0.72))
+                    .frame(width: 6, height: index.isMultiple(of: 2) ? 18 : 12)
+                    .offset(y: -104)
+                    .rotationEffect(.degrees(Double(index) * 60 + (orbitRotates ? 360 : 0)))
+                    .opacity(isComplete ? 0.26 : 0.78)
+                    .blur(radius: index.isMultiple(of: 2) ? 0 : 0.5)
             }
 
             Circle()
@@ -115,6 +156,8 @@ struct EntryRoutineBuildOnboardingPage: View {
                     .font(.system(size: 27, weight: .bold))
                     .foregroundStyle(.white)
                     .contentTransition(.symbolEffect(.replace))
+                    .scaleEffect(sparklePulse && !isComplete ? 1.16 : 1)
+                    .shadow(color: EntryOnboardingStyle.purpleSoft.opacity(sparklePulse ? 0.62 : 0.22), radius: 14)
 
                 Text(isComplete ? "Ready" : "\(Int(buildProgress * 100))%")
                     .font(.system(size: 35, weight: .heavy, design: .rounded))
@@ -127,6 +170,7 @@ struct EntryRoutineBuildOnboardingPage: View {
             }
         }
         .frame(height: 214)
+        .rotationEffect(.degrees(isComplete ? 0 : 0.001))
         .animation(.smooth(duration: 0.24), value: buildProgress)
         .animation(.spring(response: 0.36, dampingFraction: 0.76), value: isComplete)
     }
@@ -171,6 +215,12 @@ struct EntryRoutineBuildOnboardingPage: View {
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(isActive ? EntryOnboardingStyle.purple.opacity(0.13) : EntryOnboardingStyle.panelStrong)
+        )
+        .shadow(
+            color: EntryOnboardingStyle.purple.opacity(isActive ? 0.18 : 0),
+            radius: isActive ? 18 : 0,
+            x: 0,
+            y: 8
         )
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)

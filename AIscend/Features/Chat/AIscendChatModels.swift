@@ -324,7 +324,7 @@ enum AIscendChatError: LocalizedError, Equatable {
         case .firestoreUnavailable:
             "Firestore is not linked in this build, so chat history cannot load."
         case .quotaExhausted:
-            "Free access is currently exhausted for new conversations."
+            "Free users get one saved chat. Upgrade to start another conversation."
         case .backend(let message):
             message
         }

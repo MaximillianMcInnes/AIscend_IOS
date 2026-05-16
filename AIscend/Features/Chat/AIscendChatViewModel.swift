@@ -37,6 +37,7 @@ final class AIscendChatViewModel {
     @ObservationIgnored private let session: AuthSessionStore
     @ObservationIgnored private let repository: AIscendChatRepositoryProtocol
     @ObservationIgnored private let service: AIscendChatServiceProtocol
+    @ObservationIgnored private let premiumAccessManager: PremiumAccessManager
     @ObservationIgnored private var loadedIdentityKey: String?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
@@ -45,13 +46,15 @@ final class AIscendChatViewModel {
         repository: AIscendChatRepositoryProtocol = AIscendChatRepository(),
         service: AIscendChatServiceProtocol = AIscendChatService(),
         configuration: AIscendChatConfiguration = .live,
-        filters: AIscendChatFilters? = nil
+        filters: AIscendChatFilters? = nil,
+        premiumAccessManager: PremiumAccessManager? = nil
     ) {
         self.session = session
         self.repository = repository
         self.service = service
         self.configuration = configuration
         self.filters = filters
+        self.premiumAccessManager = premiumAccessManager ?? PremiumAccessManager.shared
     }
 
     var currentTitle: String {
@@ -184,6 +187,14 @@ final class AIscendChatViewModel {
         scrollTrigger += 1
     }
 
+    func requestNewConversation() async {
+        guard await ensureCanCreateNewChat() else {
+            return
+        }
+
+        startNewConversation()
+    }
+
     func preparePrefilledDraft(_ prompt: String) {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
@@ -222,7 +233,10 @@ final class AIscendChatViewModel {
             return
         }
 
-        if shouldBlockNewConversation {
+        let isCreatingNewThread = activeThreadID == nil && messages.isEmpty
+        let canCreateNewThread = isCreatingNewThread ? await ensureCanCreateNewChat() : true
+
+        if shouldBlockNewConversation || !canCreateNewThread {
             errorMessage = AIscendChatError.quotaExhausted.localizedDescription
             isPremiumUpsellPresented = true
             UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -315,7 +329,7 @@ final class AIscendChatViewModel {
     }
 
     func presentPremiumUpsell() {
-        isPremiumUpsellPresented = false
+        isPremiumUpsellPresented = true
     }
 
     func dismissPremiumUpsell() {
@@ -425,7 +439,7 @@ private extension AIscendChatViewModel {
     func mergeQuota(repository: AIscendChatQuota, auth: AIscendChatQuota) -> AIscendChatQuota {
         var merged = repository
 
-        if auth.isPremium {
+        if auth.isPremium || premiumAccessManager.isPremium {
             merged.isPremium = true
         }
 
@@ -458,6 +472,28 @@ private extension AIscendChatViewModel {
         async let repositoryQuota = repository.loadQuota(for: identity.email, userID: identity.userID)
         async let authQuota = service.loadAuthQuotaSnapshot()
         quota = mergeQuota(repository: await repositoryQuota, auth: await authQuota)
+    }
+
+    func ensureCanCreateNewChat() async -> Bool {
+        guard let chatIdentity else {
+            errorMessage = AIscendChatError.missingEmail.localizedDescription
+            return false
+        }
+
+        let canCreate = await repository.canCreateNewChat(
+            userID: chatIdentity.userID,
+            email: chatIdentity.email,
+            isPremium: premiumAccessManager.isPremium
+        )
+
+        guard canCreate else {
+            errorMessage = AIscendChatError.quotaExhausted.localizedDescription
+            isPremiumUpsellPresented = true
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return false
+        }
+
+        return true
     }
 
     func revealAssistantMessage(

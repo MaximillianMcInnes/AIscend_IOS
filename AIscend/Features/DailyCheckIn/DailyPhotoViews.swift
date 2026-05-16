@@ -919,6 +919,8 @@ private final class ScanCameraGuideOverlayView: UIView {
         focusPath.lineWidth = 1
         focusPath.stroke()
 
+        drawBlueprintMesh(in: guideRect)
+
         let path = UIBezierPath()
         switch guide {
         case .front:
@@ -943,6 +945,49 @@ private final class ScanCameraGuideOverlayView: UIView {
         drawLandmarks(in: guideRect)
         drawCornerBrackets(in: focusRect)
         drawInstruction(in: rect)
+    }
+
+    private func drawBlueprintMesh(in rect: CGRect) {
+        let w = rect.width
+        let h = rect.height
+        let path = UIBezierPath()
+
+        switch guide {
+        case .front:
+            let points = [
+                CGPoint(x: 0.50, y: 0.08),
+                CGPoint(x: 0.23, y: 0.39),
+                CGPoint(x: 0.77, y: 0.39),
+                CGPoint(x: 0.31, y: 0.66),
+                CGPoint(x: 0.69, y: 0.66),
+                CGPoint(x: 0.50, y: 0.92),
+                CGPoint(x: 0.50, y: 0.54)
+            ].map { CGPoint(x: rect.minX + w * $0.x, y: rect.minY + h * $0.y) }
+            for line in [(0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (1, 6), (2, 6), (3, 6), (4, 6), (3, 4)] {
+                path.move(to: points[line.0])
+                path.addLine(to: points[line.1])
+            }
+        case .side:
+            let points = [
+                CGPoint(x: 0.48, y: 0.08),
+                CGPoint(x: 0.76, y: 0.18),
+                CGPoint(x: 0.82, y: 0.40),
+                CGPoint(x: 0.74, y: 0.54),
+                CGPoint(x: 0.79, y: 0.64),
+                CGPoint(x: 0.66, y: 0.78),
+                CGPoint(x: 0.36, y: 0.58),
+                CGPoint(x: 0.32, y: 0.32),
+                CGPoint(x: 0.52, y: 0.94)
+            ].map { CGPoint(x: rect.minX + w * $0.x, y: rect.minY + h * $0.y) }
+            for line in [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 8), (7, 0), (7, 6), (6, 5), (6, 8), (6, 3), (6, 2), (7, 2), (1, 3), (3, 5)] {
+                path.move(to: points[line.0])
+                path.addLine(to: points[line.1])
+            }
+        }
+
+        UIColor.white.withAlphaComponent(0.24).setStroke()
+        path.lineWidth = 1
+        path.stroke()
     }
 
     private func drawFrontGuide(in rect: CGRect, path: UIBezierPath) {
@@ -1082,6 +1127,9 @@ private final class ScanCameraGuideOverlayView: UIView {
         switch guide {
         case .front:
             points = [
+                CGPoint(x: 0.50, y: 0.08),
+                CGPoint(x: 0.23, y: 0.39),
+                CGPoint(x: 0.77, y: 0.39),
                 CGPoint(x: 0.38, y: 0.42),
                 CGPoint(x: 0.62, y: 0.42),
                 CGPoint(x: 0.50, y: 0.52),
@@ -1089,16 +1137,22 @@ private final class ScanCameraGuideOverlayView: UIView {
                 CGPoint(x: 0.57, y: 0.61),
                 CGPoint(x: 0.50, y: 0.72),
                 CGPoint(x: 0.30, y: 0.52),
-                CGPoint(x: 0.70, y: 0.52)
+                CGPoint(x: 0.70, y: 0.52),
+                CGPoint(x: 0.31, y: 0.66),
+                CGPoint(x: 0.69, y: 0.66),
+                CGPoint(x: 0.50, y: 0.92)
             ]
         case .side:
             points = [
+                CGPoint(x: 0.48, y: 0.08),
                 CGPoint(x: 0.45, y: 0.12),
                 CGPoint(x: 0.62, y: 0.36),
                 CGPoint(x: 0.72, y: 0.45),
                 CGPoint(x: 0.62, y: 0.55),
                 CGPoint(x: 0.47, y: 0.72),
-                CGPoint(x: 0.34, y: 0.55)
+                CGPoint(x: 0.34, y: 0.55),
+                CGPoint(x: 0.79, y: 0.64),
+                CGPoint(x: 0.52, y: 0.94)
             ]
         }
 

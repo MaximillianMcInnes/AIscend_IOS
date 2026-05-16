@@ -14,13 +14,32 @@ struct ScanResultsPageHost: View {
     let onShare: (ScanResultsPageID) -> Void
     let onPresentPaywall: (PaywallVariant, Bool, String?, Bool) -> Void
     let allowsPostResultActions: Bool
+    let isUserPremium: Bool
     let onOpenRoutine: () -> Void
+    let onOpenGlowUpPlan: (PersistedScanRecord) -> Void
     let onOpenChat: () -> Void
     let onOpenCheckIn: () -> Void
     let onOpenStreakHub: () -> Void
     let onReturnHome: () -> Void
 
+    private var canViewPremiumResults: Bool {
+        isUserPremium
+    }
+
     var body: some View {
+        if page.requiresPremiumAccess && !canViewPremiumResults {
+            ScanResultsPremiumGatePage(
+                title: viewModel.title(for: page),
+                step: pageIndex + 1,
+                total: viewModel.pageCount,
+                onUpgrade: {
+                    onPresentPaywall(.deepReport, true, "scan_results_premium_gate", true)
+                },
+                onBackToOverview: {
+                    viewModel.goToPage(0)
+                }
+            )
+        } else {
         switch page {
         case .overview:
             OverviewResultsPage(
@@ -43,8 +62,8 @@ struct ScanResultsPageHost: View {
 
         case .harmony:
             HarmonyResultsPage(
-                face: viewModel.combinedSideProfile().merging(viewModel.combinedFrontProfile()) { _, front in front },
-                isPaid: viewModel.isPremium,
+                face: viewModel.harmonyProfile(),
+                isPaid: canViewPremiumResults,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
                 goNext: viewModel.advance,
@@ -56,7 +75,7 @@ struct ScanResultsPageHost: View {
         case .eyes:
             EyesResultsPage(
                 traits: viewModel.sectionTraits(for: .eyes),
-                isPaid: viewModel.isPremium,
+                isPaid: canViewPremiumResults,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
                 goNext: viewModel.advance,
@@ -67,8 +86,9 @@ struct ScanResultsPageHost: View {
 
         case .lips:
             LipsResultsPage(
-                traits: viewModel.sectionTraits(for: .lips),
-                isPaid: viewModel.isPremium,
+                lips: viewModel.lipsProfile(),
+                face: viewModel.combinedFrontProfile(),
+                isPaid: canViewPremiumResults,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
                 goNext: viewModel.advance,
@@ -80,7 +100,7 @@ struct ScanResultsPageHost: View {
         case .jaw:
             JawResultsPage(
                 traits: viewModel.sectionTraits(for: .jaw),
-                isPaid: viewModel.isPremium,
+                isPaid: canViewPremiumResults,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
                 goNext: viewModel.advance,
@@ -91,13 +111,11 @@ struct ScanResultsPageHost: View {
 
         case .sideProfile:
             SideProfileResultsPage(
-                traits: viewModel.sectionTraits(for: .sideProfile),
-                isPaid: viewModel.isPremium,
+                sideProfile: viewModel.combinedSideProfile(),
+                isPaid: canViewPremiumResults,
                 step: pageIndex + 1,
                 total: viewModel.pageCount,
-                goNext: {
-                    viewModel.goToPage(0)
-                },
+                goNext: viewModel.advance,
                 onUpgrade: {
                     onPresentPaywall(.deepReport, true, "side-premium", true)
                 }
@@ -121,21 +139,28 @@ struct ScanResultsPageHost: View {
                 totalPages: viewModel.pageCount,
                 title: viewModel.title(for: .done),
                 subtitle: viewModel.subtitle(for: .done),
-                isPremium: viewModel.isPremium,
+                isPremium: isUserPremium,
                 cards: viewModel.completionCards,
-                primaryTitle: viewModel.primaryDoneTitle(),
+                primaryTitle: viewModel.primaryDoneTitle(isUserPremium: isUserPremium),
                 allowsPostResultActions: allowsPostResultActions,
                 onPrimary: {
                     guard allowsPostResultActions else {
                         return
                     }
 
-                    if viewModel.isPremium {
+                    if isUserPremium, let result = viewModel.result {
                         badgeManager.recordGlowUpOpened()
-                        onOpenRoutine()
+                        onOpenGlowUpPlan(result)
                     } else {
                         onPresentPaywall(.glowUpGate, true, "glow-up-gate", true)
                     }
+                },
+                onOpenResults: {
+                    guard allowsPostResultActions else {
+                        return
+                    }
+
+                    viewModel.goToPage(0)
                 },
                 onOpenChat: {
                     guard allowsPostResultActions else {
@@ -154,5 +179,93 @@ struct ScanResultsPageHost: View {
                 onReturnHome: onReturnHome
             )
         }
+        }
+    }
+}
+
+private extension ScanResultsPageID {
+    var requiresPremiumAccess: Bool {
+        switch self {
+        case .placement, .harmony, .eyes, .lips, .jaw, .sideProfile:
+            return true
+        case .overview, .premiumPush, .done:
+            return false
+        }
+    }
+}
+
+private struct ScanResultsPremiumGatePage: View {
+    let title: String
+    let step: Int
+    let total: Int
+    let onUpgrade: () -> Void
+    let onBackToOverview: () -> Void
+
+    @State private var appeared = false
+
+    var body: some View {
+        ResultsFullscreenShell(
+            title: title,
+            subtitle: "Premium result section",
+            step: step,
+            total: total,
+            topRight: {
+                ScanResultsAccessPill(isPaid: false, onUpgrade: onUpgrade)
+            },
+            bottomCTA: {
+                ResultsNextButton(title: "Unlock Premium", systemImage: "lock.open.fill", action: onUpgrade)
+            },
+            content: {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
+                    ScanResultsFeatureIntroPanel(
+                        title: "Unlock the full facial analysis",
+                        copy: "This section is part of the Premium scan report. Free access keeps the overview available without exposing locked analysis.",
+                        systemImage: "lock.fill"
+                    )
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
+                        PremiumGateBenefit(title: "Full scan breakdowns", symbol: "waveform.path.ecg.rectangle.fill")
+                        PremiumGateBenefit(title: "Premium facial analysis pages", symbol: "face.smiling.inverse")
+                        PremiumGateBenefit(title: "Previous scan insights", symbol: "clock.arrow.circlepath")
+                    }
+
+                    Button(action: onBackToOverview) {
+                        AIscendButtonLabel(title: "Back to Overview", leadingSymbol: "arrow.uturn.left")
+                    }
+                    .buttonStyle(AIscendButtonStyle(variant: .secondary))
+                }
+                .opacity(appeared ? 1 : 0)
+                .offset(y: appeared ? 0 : 14)
+            }
+        )
+        .onAppear {
+            AIScendSuperwallAnalytics.track(
+                "scan_results_premium_gate",
+                params: ["section": title]
+            )
+            withAnimation(.smooth(duration: 0.32)) {
+                appeared = true
+            }
+        }
+    }
+}
+
+private struct PremiumGateBenefit: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            Image(systemName: symbol)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                .frame(width: 24, height: 24)
+
+            Text(title)
+                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(AIscendTheme.Spacing.medium)
+        .aiscendPanel(.muted)
     }
 }

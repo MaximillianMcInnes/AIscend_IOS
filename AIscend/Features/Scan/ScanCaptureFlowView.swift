@@ -10,6 +10,7 @@ struct ScanCaptureFlowView: View {
     let session: AuthSessionStore
     let isPremium: Bool
     let onOpenRoutine: () -> Void
+    let onOpenGlowUpPlan: (PersistedScanRecord) -> Void
     let onOpenChat: () -> Void
     let onReturnHome: () -> Void
     let onDismiss: () -> Void
@@ -28,6 +29,7 @@ struct ScanCaptureFlowView: View {
     @State private var scanErrorMessage: String?
     @State private var scanErrorAlert: ScanFlowErrorAlert?
     @State private var activeStep: ScanCaptureStep = .front
+    @State private var scanTask: Task<Void, Never>?
 
     private let scanAnalysisService: ScanAnalysisServiceProtocol
 
@@ -39,6 +41,7 @@ struct ScanCaptureFlowView: View {
         isPremium: Bool = false,
         scanAnalysisService: ScanAnalysisServiceProtocol = ScanAnalysisService(),
         onOpenRoutine: @escaping () -> Void = {},
+        onOpenGlowUpPlan: @escaping (PersistedScanRecord) -> Void = { _ in },
         onOpenChat: @escaping () -> Void = {},
         onReturnHome: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
@@ -46,6 +49,7 @@ struct ScanCaptureFlowView: View {
         self.session = session
         self.isPremium = isPremium
         self.onOpenRoutine = onOpenRoutine
+        self.onOpenGlowUpPlan = onOpenGlowUpPlan
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
         self.onDismiss = onDismiss
@@ -58,7 +62,7 @@ struct ScanCaptureFlowView: View {
     var body: some View {
         ZStack {
             if isAnalyzing {
-                ScanAnalysisLoadingView()
+                ScanAnalysisLoadingView(onCancel: cancelScan)
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             } else {
                 activeCaptureStepPage
@@ -85,10 +89,12 @@ struct ScanCaptureFlowView: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isUserPremium: isPremium,
                 onOpenScan: {
                     showingResults = false
                 },
                 onOpenRoutine: onOpenRoutine,
+                onOpenGlowUpPlan: onOpenGlowUpPlan,
                 onOpenChat: onOpenChat,
                 onReturnHome: onReturnHome,
                 onDismiss: {
@@ -143,9 +149,7 @@ struct ScanCaptureFlowView: View {
                     updateImage(image, data: data, slot: .side)
                 },
                 onContinue: sideImageData == nil ? nil : {
-                    Task {
-                        await analyzeScan()
-                    }
+                    startAnalyzeScan()
                 },
                 footnote: scanErrorMessage
             )
@@ -167,6 +171,24 @@ struct ScanCaptureFlowView: View {
     }
 
     @MainActor
+    private func startAnalyzeScan() {
+        guard scanTask == nil else { return }
+
+        scanTask = Task {
+            await analyzeScan()
+        }
+    }
+
+    @MainActor
+    private func cancelScan() {
+        scanTask?.cancel()
+        scanTask = nil
+        isAnalyzing = false
+        activeStep = .side
+        scanErrorMessage = "Scan cancelled."
+    }
+
+    @MainActor
     private func analyzeScan() async {
         guard let frontImageData, let sideImageData else {
             presentScanError(
@@ -178,21 +200,34 @@ struct ScanCaptureFlowView: View {
 
         isAnalyzing = true
         scanErrorMessage = nil
+        defer {
+            isAnalyzing = false
+            scanTask = nil
+        }
 
         do {
-            scanResult = try await scanAnalysisService.analyze(
+            let result = try await scanAnalysisService.analyze(
                 frontImageData: frontImageData,
                 sideImageData: sideImageData,
                 email: session.user?.email,
                 userID: session.user?.id,
                 isPremium: isPremium
             )
+
+            guard !Task.isCancelled else { return }
+
+            scanResult = result
+            await PremiumAccessManager.shared.recordFreeScanUsedIfNeeded()
             showingResults = true
+        } catch is CancellationError {
+            scanErrorMessage = "Scan cancelled."
         } catch {
+            guard !Task.isCancelled else {
+                scanErrorMessage = "Scan cancelled."
+                return
+            }
             presentScanError(error)
         }
-
-        isAnalyzing = false
     }
 
     private func presentScanError(_ error: Error) {
@@ -236,6 +271,8 @@ private struct ScanFlowErrorAlert: Identifiable {
 }
 
 private struct ScanAnalysisLoadingView: View {
+    let onCancel: () -> Void
+
     private let estimatedDuration: TimeInterval = 180
     private let steps = ScanAnalysisStep.defaultSteps
 
@@ -281,6 +318,24 @@ private struct ScanAnalysisLoadingView: View {
                             remainingSeconds: remaining,
                             steps: steps
                         )
+
+                        Button(action: onCancel) {
+                            Label("Cancel scan", systemImage: "xmark.circle.fill")
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .foregroundStyle(AIscendTheme.Colors.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, AIscendTheme.Spacing.medium)
+                                .background(
+                                    Capsule()
+                                        .fill(AIscendTheme.Colors.surfaceGlass.opacity(0.72))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Cancel scan")
                     }
                     .padding(.horizontal, AIscendTheme.Spacing.large)
                     .padding(.vertical, AIscendTheme.Spacing.xLarge)

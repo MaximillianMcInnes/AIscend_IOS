@@ -234,12 +234,14 @@ private struct GlowUpTimelineRow: View {
                 AIscendCachedImage(
                     localURL: source.localURL,
                     remoteURL: source.remoteURL,
-                    maxPixelDimension: 220
+                    maxPixelDimension: 220,
+                    contentMode: .fill
                 ) {
                     Image(systemName: "person.crop.rectangle")
                         .font(.system(size: 20, weight: .medium))
                         .foregroundStyle(AIscendTheme.Colors.textMuted)
                 }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .blur(radius: isPrivacyModeEnabled ? 10 : 0)
                     .clipped()
             } else {
@@ -261,7 +263,7 @@ private struct GlowUpTimelineRow: View {
                     .background(Circle().fill(Color.black.opacity(0.46)))
             }
         }
-        .frame(width: 58, height: 72)
+        .frame(width: 54, height: 72)
         .clipShape(RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AIscendTheme.Radius.medium, style: .continuous)
@@ -269,4 +271,3 @@ private struct GlowUpTimelineRow: View {
         )
     }
 }
-

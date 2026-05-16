@@ -9,12 +9,15 @@ import SwiftUI
 
 struct ScanResultsFlowView: View {
     let initialResult: PersistedScanRecord?
+    let isUserPremium: Bool
     let onOpenScan: () -> Void
     let onOpenRoutine: () -> Void
+    let onOpenGlowUpPlan: (PersistedScanRecord) -> Void
     let onOpenChat: () -> Void
     let onReturnHome: () -> Void
     let onDismiss: () -> Void
     let allowsPostResultActions: Bool
+    let showsArchiveChrome: Bool
 
     @ObservedObject private var badgeManager: BadgeManager
     @ObservedObject private var dailyCheckInStore: DailyCheckInStore
@@ -22,7 +25,7 @@ struct ScanResultsFlowView: View {
     @StateObject private var viewModel: ScanResultsViewModel
     @StateObject private var paywallCoordinator = PaywallCoordinator()
     @StateObject private var shareCoordinator = ShareCoordinator()
-    @State private var showingUpgrade = false
+    @StateObject private var premiumAccessManager = PremiumAccessManager.shared
     @State private var showingDailyCheckIn = false
     @State private var showingStreakHub = false
 
@@ -33,20 +36,26 @@ struct ScanResultsFlowView: View {
         dailyCheckInStore: DailyCheckInStore,
         notificationManager: NotificationManager,
         repository: ScanResultsRepositoryProtocol = ScanResultsRepository(),
+        isUserPremium: Bool = false,
         allowsPostResultActions: Bool = true,
+        showsArchiveChrome: Bool = false,
         onOpenScan: @escaping () -> Void = {},
         onOpenRoutine: @escaping () -> Void = {},
+        onOpenGlowUpPlan: @escaping (PersistedScanRecord) -> Void = { _ in },
         onOpenChat: @escaping () -> Void = {},
         onReturnHome: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
     ) {
         self.initialResult = initialResult
+        self.isUserPremium = isUserPremium
         self.onOpenScan = onOpenScan
         self.onOpenRoutine = onOpenRoutine
+        self.onOpenGlowUpPlan = onOpenGlowUpPlan
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
         self.onDismiss = onDismiss
         self.allowsPostResultActions = allowsPostResultActions
+        self.showsArchiveChrome = showsArchiveChrome
         self._badgeManager = ObservedObject(wrappedValue: badgeManager)
         self._dailyCheckInStore = ObservedObject(wrappedValue: dailyCheckInStore)
         self._notificationManager = ObservedObject(wrappedValue: notificationManager)
@@ -70,12 +79,6 @@ struct ScanResultsFlowView: View {
                 bottomChrome
             }
         }
-        .sheet(isPresented: $showingUpgrade) {
-            AIscendUpgradeView(
-                premiumURL: AIscendChatConfiguration.live.premiumURL,
-                onDismiss: { showingUpgrade = false }
-            )
-        }
         .sheet(item: $shareCoordinator.activePayload) { payload in
             SharePreviewView(
                 payload: payload,
@@ -87,11 +90,26 @@ struct ScanResultsFlowView: View {
         .sheet(isPresented: $showingDailyCheckIn, content: dailyCheckInSheet)
         .sheet(isPresented: $showingStreakHub, content: streakHubSheet)
         .fullScreenCover(item: $paywallCoordinator.activePresentation) { presentation in
-            PaywallView(
-                presentation: presentation,
-                onPrimary: { handlePaywallPrimary() },
-                onSecondary: { paywallCoordinator.dismiss() },
-                onDismiss: { paywallCoordinator.dismiss() }
+            AIScendPremiumPaywallView(
+                variant: presentation.variant.aiscendPremiumVariant,
+                offer: .threeDayTrial,
+                onDismiss: {
+                    paywallCoordinator.dismiss()
+                },
+                onPurchase: { productId in
+                    Task {
+                        if await premiumAccessManager.purchase(productID: productId) {
+                            paywallCoordinator.dismiss()
+                        }
+                    }
+                },
+                onRestore: {
+                    Task {
+                        if await premiumAccessManager.restorePurchases() {
+                            paywallCoordinator.dismiss()
+                        }
+                    }
+                }
             )
         }
         .task(id: initialResult?.meta.scanId ?? initialResult?.saveFingerprint ?? "latest-scan-result") {
@@ -105,7 +123,7 @@ struct ScanResultsFlowView: View {
         .onChange(of: viewModel.currentPageIndex) { oldValue, newValue in
             viewModel.handlePageChange(from: oldValue, to: newValue)
 
-            if allowsPostResultActions, !viewModel.isPremium, viewModel.currentPageID == .premiumPush {
+            if allowsPostResultActions, !effectivePremiumAccess, viewModel.currentPageID == .premiumPush {
                 paywallCoordinator.present(
                     .rewardLoop,
                     dismissable: true,
@@ -114,10 +132,10 @@ struct ScanResultsFlowView: View {
             }
         }
         .overlay {
-            GeometryReader { geometry in
-                VStack {
-                    HStack {
-                        if allowsPostResultActions {
+            if showsArchiveChrome {
+                GeometryReader { geometry in
+                    VStack {
+                        HStack {
                             Button {
                                 showingStreakHub = true
                             } label: {
@@ -128,19 +146,19 @@ struct ScanResultsFlowView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+
+                            Spacer(minLength: AIscendTheme.Spacing.small)
+
+                            ResultsCloseButton(action: onDismiss)
                         }
+                        .padding(.top, geometry.safeAreaInsets.top + AIscendTheme.Spacing.small)
+                        .padding(.horizontal, AIscendTheme.Spacing.screenInset)
 
-                        Spacer(minLength: AIscendTheme.Spacing.small)
-
-                        ResultsCloseButton(action: onDismiss)
+                        Spacer()
                     }
-                    .padding(.top, geometry.safeAreaInsets.top + AIscendTheme.Spacing.small)
-                    .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-
-                    Spacer()
                 }
+                .allowsHitTesting(true)
             }
-            .allowsHitTesting(true)
         }
         .overlay(alignment: .top) {
             if allowsPostResultActions, let badge = badgeManager.latestUnlockedBadge {
@@ -186,7 +204,9 @@ struct ScanResultsFlowView: View {
                         )
                     },
                     allowsPostResultActions: allowsPostResultActions,
+                    isUserPremium: effectivePremiumAccess,
                     onOpenRoutine: onOpenRoutine,
+                    onOpenGlowUpPlan: onOpenGlowUpPlan,
                     onOpenChat: onOpenChat,
                     onOpenCheckIn: {
                         guard allowsPostResultActions else { return }
@@ -224,10 +244,6 @@ struct ScanResultsFlowView: View {
         .padding(.bottom, AIscendTheme.Spacing.small)
     }
 
-    private func handlePaywallPrimary() {
-        paywallCoordinator.dismiss()
-    }
-
     private func presentPaywall(
         _ variant: PaywallVariant,
         dismissable: Bool,
@@ -236,6 +252,19 @@ struct ScanResultsFlowView: View {
     ) {
         guard allowsPostResultActions else {
             return
+        }
+
+        if !effectivePremiumAccess {
+            AIScendSuperwallAnalytics.trackPaywallRequest(
+                feature: variant.premiumFeature,
+                accessPlan: .free,
+                source: sourceKey
+            )
+            AIScendSuperwallAnalytics.trackPlacementIfKnown(
+                sourceKey,
+                feature: variant.premiumFeature,
+                accessPlan: .free
+            )
         }
 
         paywallCoordinator.present(
@@ -262,7 +291,7 @@ struct ScanResultsFlowView: View {
                 dailyCheckInStore: dailyCheckInStore,
                 badgeManager: badgeManager,
                 notificationManager: notificationManager,
-                isPremium: viewModel.isPremium,
+                isPremium: effectivePremiumAccess,
                 onComplete: {},
                 onDismiss: { showingDailyCheckIn = false }
             )
@@ -288,6 +317,36 @@ struct ScanResultsFlowView: View {
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private extension ScanResultsFlowView {
+    var effectivePremiumAccess: Bool {
+        isUserPremium || premiumAccessManager.isPremium
+    }
+}
+
+private extension PaywallVariant {
+    var aiscendPremiumVariant: AIScendPremiumPaywallVariant {
+        switch self {
+        case .lockedInsight, .deepReport:
+            .diagnostics
+        case .rewardLoop:
+            .transformation
+        case .glowUpGate:
+            .progress
+        }
+    }
+
+    var premiumFeature: AIScendPremiumFeature {
+        switch self {
+        case .lockedInsight, .deepReport:
+            .lockedScanDiagnostics
+        case .rewardLoop:
+            .scanTransformation
+        case .glowUpGate:
+            .glowUpRoutine
         }
     }
 }

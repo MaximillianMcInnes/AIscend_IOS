@@ -18,54 +18,77 @@ struct EntryHeightWeightOnboardingPage: View {
     var body: some View {
         EntryOnboardingPageContainer(
             title: "Height & weight",
-            subtitle: "This will be used to predict your height potential & create your custom plan."
+            subtitle: "This will be used to predict your height potential and create your custom plan.",
+            usesTypewriterSubtitle: false
         ) {
-            VStack(spacing: 38) {
-                HStack(alignment: .top, spacing: 22) {
-                    VStack(spacing: 18) {
+            VStack(spacing: 24) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(spacing: 12) {
                         Text("Height")
-                            .font(.system(size: 27, weight: .heavy, design: .rounded))
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
 
                         heightPickers
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 14)
+                    .padding(.bottom, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(EntryOnboardingStyle.panelStrong)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
                     .frame(maxWidth: .infinity)
 
-                    VStack(spacing: 18) {
+                    VStack(spacing: 12) {
                         Text("Weight")
-                            .font(.system(size: 27, weight: .heavy, design: .rounded))
+                            .font(.system(size: 22, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white)
 
                         weightPicker
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.top, 14)
+                    .padding(.bottom, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .fill(EntryOnboardingStyle.panelStrong)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
                     .frame(maxWidth: .infinity)
                 }
-                .frame(height: 310)
+                .frame(height: 286)
                 .overlay(alignment: .center) {
-                    HStack(spacing: 22) {
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.white.opacity(0.09))
+                    HStack(spacing: 14) {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
                             .frame(maxWidth: .infinity)
 
-                        RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.white.opacity(0.09))
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.white.opacity(0.10))
                             .frame(maxWidth: .infinity)
                     }
-                    .frame(height: 68)
-                    .offset(y: 33)
+                    .padding(.horizontal, 8)
+                    .frame(height: 58)
+                    .offset(y: 23)
                     .allowsHitTesting(false)
                 }
 
                 measurementToggle
-                    .padding(.top, 12)
             }
-            .padding(.top, 72)
+            .padding(.top, 24)
             .opacity(controlsVisible ? 1 : 0)
-            .offset(x: controlsVisible ? 0 : 30, y: controlsVisible ? 0 : 30)
-            .animation(.smooth(duration: 0.44), value: controlsVisible)
+            .offset(y: controlsVisible ? 0 : 18)
+            .animation(.spring(response: 0.44, dampingFraction: 0.84), value: controlsVisible)
             .onAppear {
                 controlsVisible = false
-                withAnimation(.smooth(duration: 0.1)) {
+                withAnimation(.smooth(duration: 0.12)) {
                     controlsVisible = true
                 }
             }
@@ -84,7 +107,7 @@ struct EntryHeightWeightOnboardingPage: View {
                 }
             }
             .pickerStyle(.wheel)
-            .frame(height: 210)
+            .frame(height: 202)
             .clipped()
             .onChange(of: draft.heightCentimeters) { _, _ in
                 EntryOnboardingHaptics.selection()
@@ -100,7 +123,7 @@ struct EntryHeightWeightOnboardingPage: View {
                     }
                 }
                 .pickerStyle(.wheel)
-                .frame(height: 210)
+                .frame(height: 202)
                 .clipped()
                 .onChange(of: draft.heightFeet) { _, _ in
                     EntryOnboardingHaptics.selection()
@@ -115,7 +138,7 @@ struct EntryHeightWeightOnboardingPage: View {
                     }
                 }
                 .pickerStyle(.wheel)
-                .frame(height: 210)
+                .frame(height: 202)
                 .clipped()
                 .onChange(of: draft.heightInches) { _, _ in
                     EntryOnboardingHaptics.selection()
@@ -136,7 +159,7 @@ struct EntryHeightWeightOnboardingPage: View {
                 }
             }
             .pickerStyle(.wheel)
-            .frame(height: 210)
+            .frame(height: 202)
             .clipped()
             .onChange(of: draft.weightKilograms) { _, _ in
                 EntryOnboardingHaptics.selection()
@@ -151,7 +174,7 @@ struct EntryHeightWeightOnboardingPage: View {
                 }
             }
             .pickerStyle(.wheel)
-            .frame(height: 210)
+            .frame(height: 202)
             .clipped()
             .onChange(of: draft.weightPounds) { _, _ in
                 EntryOnboardingHaptics.selection()
@@ -162,7 +185,7 @@ struct EntryHeightWeightOnboardingPage: View {
     private var measurementToggle: some View {
         HStack(spacing: 22) {
             Text("Imperial")
-                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .font(.system(size: 19, weight: .heavy, design: .rounded))
                 .foregroundStyle(draft.usesMetricMeasurements ? Color.white.opacity(0.42) : .white)
 
             Button {
@@ -175,11 +198,11 @@ struct EntryHeightWeightOnboardingPage: View {
                 ZStack(alignment: draft.usesMetricMeasurements ? .trailing : .leading) {
                     Capsule(style: .continuous)
                         .fill(Color.white.opacity(0.42))
-                        .frame(width: 88, height: 48)
+                        .frame(width: 76, height: 42)
 
                     Circle()
                         .fill(.white)
-                        .frame(width: 40, height: 40)
+                        .frame(width: 34, height: 34)
                         .padding(4)
                 }
             }
@@ -187,10 +210,20 @@ struct EntryHeightWeightOnboardingPage: View {
             .accessibilityLabel("Measurement system")
 
             Text("Metric")
-                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                .font(.system(size: 19, weight: .heavy, design: .rounded))
                 .foregroundStyle(draft.usesMetricMeasurements ? .white : Color.white.opacity(0.42))
         }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.07))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
     }
 
     private func syncMeasurementValues() {

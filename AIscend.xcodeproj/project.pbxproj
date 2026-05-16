@@ -13,6 +13,7 @@
 		82C0A1012F86000100B0974B /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 82C0A1022F86000100B0974B /* FirebaseFirestore */; };
 		82C0A1032F86012000B0974B /* SuperwallKit in Frameworks */ = {isa = PBXBuildFile; productRef = 82C0A1052F86012000B0974B /* SuperwallKit */; };
 		82C0A1062F86012100B0974B /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 82C0A1072F86012100B0974B /* FirebaseStorage */; };
+		CD69CD6F2FB75B0700B89683 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CD69CD6E2FB75B0700B89683 /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +39,7 @@
 		82B6F7512F85246200B0974B /* AIscendUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AIscendUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		82C0A1102FAB000100B0974B /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		82C0A1112FAB000100B0974B /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		CD69CD6E2FB75B0700B89683 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -77,6 +79,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				82B6F7642F85300000B0974B /* FirebaseCore in Frameworks */,
+				CD69CD6F2FB75B0700B89683 /* StoreKit.framework in Frameworks */,
 				82B6F7682F85410000B0974B /* FirebaseAuth in Frameworks */,
 				82B6F7692F85410000B0974B /* GoogleSignIn in Frameworks */,
 				82C0A1012F86000100B0974B /* FirebaseFirestore in Frameworks */,
@@ -109,6 +112,7 @@
 				82B6F7392F85246100B0974B /* AIscend */,
 				82B6F74A2F85246200B0974B /* AIscendTests */,
 				82B6F7542F85246200B0974B /* AIscendUITests */,
+				CD69CD6D2FB75B0600B89683 /* Frameworks */,
 				82B6F7382F85246100B0974B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -130,6 +134,14 @@
 				82C0A1112FAB000100B0974B /* Release.xcconfig */,
 			);
 			path = Config;
+			sourceTree = "<group>";
+		};
+		CD69CD6D2FB75B0600B89683 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				CD69CD6E2FB75B0700B89683 /* StoreKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -736,15 +748,15 @@
 			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
 		};
-		82C0A1072F86012100B0974B /* FirebaseStorage */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseStorage;
-		};
 		82C0A1052F86012000B0974B /* SuperwallKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 82C0A1042F86012000B0974B /* XCRemoteSwiftPackageReference "Superwall-iOS" */;
 			productName = SuperwallKit;
+		};
+		82C0A1072F86012100B0974B /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 82B6F7662F85300000B0974B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

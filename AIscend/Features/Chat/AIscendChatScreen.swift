@@ -9,17 +9,26 @@ import SwiftUI
 
 struct AIscendChatScreenContainer: View {
     let session: AuthSessionStore
+    let onPremiumUpsell: () -> Void
     @Binding private var pendingDraft: String?
     @State private var viewModel: AIscendChatViewModel
 
-    init(session: AuthSessionStore, pendingDraft: Binding<String?> = .constant(nil)) {
+    init(
+        session: AuthSessionStore,
+        pendingDraft: Binding<String?> = .constant(nil),
+        onPremiumUpsell: @escaping () -> Void = {}
+    ) {
         self.session = session
+        self.onPremiumUpsell = onPremiumUpsell
         self._pendingDraft = pendingDraft
         _viewModel = State(initialValue: AIscendChatViewModel(session: session))
     }
 
     var body: some View {
-        AIscendChatScreen(viewModel: viewModel)
+        AIscendChatScreen(
+            viewModel: viewModel,
+            onPremiumUpsell: onPremiumUpsell
+        )
             .task(id: session.user?.id) {
                 await viewModel.syncWithSession()
             }
@@ -46,6 +55,7 @@ struct AIscendChatScreenContainer: View {
 
 private struct AIscendChatScreen: View {
     @Bindable var viewModel: AIscendChatViewModel
+    let onPremiumUpsell: () -> Void
     @FocusState private var composerFocused: Bool
 
     /// Raise this if your custom tab bar is taller.
@@ -91,12 +101,13 @@ private struct AIscendChatScreen: View {
                         .zIndex(5)
                 }
             }
-            .sheet(isPresented: $viewModel.isPremiumUpsellPresented) {
-                AIscendChatPremiumUpsellSheet(
-                    premiumURL: viewModel.premiumURL,
-                    onDismiss: viewModel.dismissPremiumUpsell,
-                    trialEligible: viewModel.quota.trialEligible
-                )
+            .onChange(of: viewModel.isPremiumUpsellPresented) { _, isPresented in
+                guard isPresented else {
+                    return
+                }
+
+                viewModel.dismissPremiumUpsell()
+                onPremiumUpsell()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer
@@ -181,7 +192,9 @@ private struct AIscendChatScreen: View {
 
             chromeButton(symbol: "square.and.pencil", action: {
                 dismissComposer()
-                viewModel.startNewConversation()
+                Task {
+                    await viewModel.requestNewConversation()
+                }
             })
         }
         .padding(.horizontal, AIscendTheme.Spacing.small)
@@ -217,15 +230,16 @@ private struct AIscendChatScreen: View {
                     } else if viewModel.showEmptyState {
                         AIscendChatEmptyState(
                             onStart: {
-                                viewModel.startNewConversation()
-                                composerFocused = true
+                                Task {
+                                    await viewModel.requestNewConversation()
+                                    composerFocused = true
+                                }
                             },
                             onPromptTap: { prompt in
-                                viewModel.startNewConversation()
-                                viewModel.draft = prompt
-                                composerFocused = true
-
                                 Task {
+                                    await viewModel.requestNewConversation()
+                                    viewModel.draft = prompt
+                                    composerFocused = true
                                     await viewModel.sendCurrentDraft()
                                 }
                             }

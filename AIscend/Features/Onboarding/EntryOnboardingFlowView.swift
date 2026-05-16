@@ -279,10 +279,6 @@ struct EntryOnboardingFlowView: View {
             EntryReferralOnboardingPage(draft: $draft)
         case .faceScan:
             EntryFaceScanOnboardingPage(
-                onSkip: {
-                    EntryOnboardingHaptics.advance()
-                    moveForward()
-                },
                 onComplete: {
                     EntryOnboardingHaptics.success()
                     moveForward()

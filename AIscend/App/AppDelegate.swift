@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         FirebaseBootstrapper.configure()
+        AIScendSuperwallAnalytics.configureFromBundle()
         return true
     }
 
@@ -24,6 +25,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
+        #if canImport(SuperwallKit)
+        if AIScendSuperwallDeepLinkHandler.handle(url) {
+            return true
+        }
+        #endif
+
         #if canImport(GoogleSignIn)
         return GIDSignIn.sharedInstance.handle(url)
         #else

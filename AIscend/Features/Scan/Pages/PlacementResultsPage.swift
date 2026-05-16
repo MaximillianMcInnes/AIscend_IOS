@@ -22,6 +22,7 @@ struct PlacementResultsPage: View {
             step: pageIndex + 1,
             total: totalPages,
             showsBottomCTA: false,
+            showsStepPill: false,
             topRight: {
                 AIScendShareEntryButton(title: "Share", action: onShare)
             },
@@ -31,7 +32,6 @@ struct PlacementResultsPage: View {
         ) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                 PlacementClassPanel(
-                    tierTitle: result?.tierTitle ?? "Prime",
                     percentile: percentile,
                     accessLevel: result?.accessLevel ?? .free
                 )
@@ -79,28 +79,31 @@ struct PlacementResultsPage: View {
 }
 
 private struct PlacementClassPanel: View {
-    let tierTitle: String
     let percentile: Int
     let accessLevel: ScanResultsAccess
 
     var body: some View {
         ResultsAuroraPanel(intensity: .standard, cornerRadius: 28) {
-            HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.mediumLarge) {
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                    Text("YOU ARE:")
+                    Text("PLACEMENT ENGINE")
                         .aiscendTextStyle(.eyebrow, color: AIscendTheme.Colors.textMuted)
 
                     HStack(alignment: .firstTextBaseline, spacing: AIscendTheme.Spacing.xSmall) {
-                        Text(tierTitle)
+                        Text("AIScend")
                             .font(.system(size: 36, weight: .black, design: .default))
                             .foregroundStyle(AIscendTheme.Colors.textPrimary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.66)
 
-                        Text("class")
+                        Text("read")
                             .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
                             .lineLimit(1)
                     }
+
+                    Text("A cleaner ranking pass before the deeper feature breakdown.")
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: AIscendTheme.Spacing.small)
@@ -136,14 +139,16 @@ private struct PlacementBellCurveHero: View {
     let percentile: Int
 
     private var markerProgress: Double {
-        min(max(1 - (Double(percentile) / 100.0), 0.04), 0.98)
+        min(max(1 - (Double(percentile) / 100.0), 0.06), 0.94)
     }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             GeometryReader { geometry in
                 let size = geometry.size
-                let markerX = size.width * CGFloat(markerProgress)
+                let horizontalInset: CGFloat = 18
+                let chartWidth = max(size.width - horizontalInset * 2, 1)
+                let markerX = horizontalInset + chartWidth * CGFloat(markerProgress)
 
                 ZStack(alignment: .bottomLeading) {
                     RoundedRectangle(cornerRadius: 32, style: .continuous)
@@ -182,7 +187,7 @@ private struct PlacementBellCurveHero: View {
                                 endPoint: .bottom
                             )
                         )
-                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .padding(.horizontal, horizontalInset)
                         .padding(.bottom, 58)
                         .padding(.top, 52)
 
@@ -199,7 +204,7 @@ private struct PlacementBellCurveHero: View {
                             ),
                             style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
                         )
-                        .padding(.horizontal, AIscendTheme.Spacing.small)
+                        .padding(.horizontal, horizontalInset)
                         .padding(.bottom, 58)
                         .padding(.top, 52)
                         .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.42), radius: 18, x: 0, y: 0)
@@ -209,7 +214,7 @@ private struct PlacementBellCurveHero: View {
                             .stroke(style: StrokeStyle(lineWidth: 1.4, dash: [7, 7]))
                             .foregroundStyle(Color.white.opacity(xRatio == 0.50 ? 0.34 : 0.16))
                             .frame(width: 1, height: size.height * 0.52)
-                            .offset(x: size.width * xRatio, y: -size.height * 0.18)
+                            .offset(x: horizontalInset + chartWidth * xRatio, y: -size.height * 0.18)
                     }
 
                     Rectangle()

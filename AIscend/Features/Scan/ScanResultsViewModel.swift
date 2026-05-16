@@ -110,22 +110,34 @@ final class ScanResultsViewModel: ObservableObject {
     var completionCards: [ResultsCompletionCardModel] {
         [
             ResultsCompletionCardModel(
-                title: completionArchiveTitle,
+                title: "Scan complete",
+                detail: "The scan finished and the result is ready to turn into a focused next step.",
+                symbol: "checkmark.seal.fill",
+                accent: .mint
+            ),
+            ResultsCompletionCardModel(
+                title: "Results saved",
                 detail: completionArchiveDetail,
                 symbol: "tray.full.fill",
                 accent: .sky
             ),
             ResultsCompletionCardModel(
-                title: "Advisor can unpack the result",
-                detail: "Use chat to translate any section into a sharper action plan or improvement priority list.",
+                title: "Results can be revisited",
+                detail: "Your archive keeps the scan available so future progress has a clean comparison point.",
+                symbol: "clock.arrow.circlepath",
+                accent: .dawn
+            ),
+            ResultsCompletionCardModel(
+                title: "Ask AI about scan",
+                detail: "Use the advisor to translate any scan field into a sharper action plan or priority list.",
                 symbol: "message.fill",
                 accent: .dawn
             ),
             ResultsCompletionCardModel(
-                title: isPremium ? "Glow-up planning is the next move" : "The next layer is the full improvement plan",
+                title: "Go to Glow-Up plan",
                 detail: isPremium
-                ? "Take the scan into your routine so the result becomes a cleaner execution plan."
-                : "Unlock the full plan to move from curiosity into guided execution.",
+                    ? "Take this scan into a personalised routine generated from the actual result JSON."
+                    : "Premium unlocks the personalised routine generated from this scan.",
                 symbol: "scope",
                 accent: .mint
             )
@@ -382,8 +394,8 @@ final class ScanResultsViewModel: ObservableObject {
         return URL(string: raw)
     }
 
-    func primaryDoneTitle() -> String {
-        isPremium ? "Open Glow-Up Plan" : "Unlock Full Plan"
+    func primaryDoneTitle(isUserPremium: Bool) -> String {
+        isUserPremium ? "Open Glow-Up Plan" : "Unlock Full Plan"
     }
 
     func sharePayload(for page: ScanResultsPageID) -> AIScendSharePayload? {
@@ -512,8 +524,26 @@ final class ScanResultsViewModel: ObservableObject {
         result?.payload.frontProfile ?? [:]
     }
 
+    func lipsProfile() -> [String: ScanJSONValue] {
+        combinedFrontProfile()["lips"]?.objectValue ?? [:]
+    }
+
     func combinedSideProfile() -> [String: ScanJSONValue] {
         result?.payload.sideProfile ?? [:]
+    }
+
+    func harmonyProfile() -> [String: ScanJSONValue] {
+        var profile = combinedSideProfile().merging(combinedFrontProfile()) { _, front in front }
+
+        if let ratios = result?.payload.raw["ratios"]?.objectValue {
+            profile["ratios"] = .object(ratios)
+
+            for (key, value) in ratios {
+                profile[key] = value
+            }
+        }
+
+        return profile
     }
 
     private func resetDerivedCaches() {

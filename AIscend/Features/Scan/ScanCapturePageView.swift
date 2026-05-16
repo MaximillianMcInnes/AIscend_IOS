@@ -42,144 +42,43 @@ struct ScanCapturePageView: View {
                 DashboardAmbientLayer()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
                         topBar(topInset: geometry.safeAreaInsets.top)
+                        ScanCaptureProgressStrip(stepTitle: stepTitle, guide: guide, isReady: image != nil)
 
-                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                            Text(stepTitle)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .foregroundStyle(AIscendTheme.Colors.accentGlow)
-                                .textCase(.uppercase)
-
-                            Text(subtitle)
-                                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .padding(.horizontal, 2)
-
-                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [
-                                                Color(hex: "F8F5FF").opacity(0.95),
-                                                Color(hex: "DED7F0").opacity(0.92)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-
-                                if let image {
-                                    Image(uiImage: image)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                        .clipped()
-                                        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-                                } else {
-                                    ScanFaceGuidePlaceholder(guide: guide, symbol: symbol)
-                                        .padding(.horizontal, AIscendTheme.Spacing.xLarge)
-                                        .padding(.vertical, AIscendTheme.Spacing.large)
-                                }
-
-                                VStack {
-                                    Spacer()
-
-                                    HStack {
-                                        Image(systemName: image == nil ? "viewfinder" : "checkmark.seal.fill")
-                                            .font(.system(size: 13, weight: .bold))
-
-                                        Text(image == nil ? guide.instruction : "\(guide.title) ready")
-                                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                            .lineLimit(2)
-                                    }
-                                    .foregroundStyle(image == nil ? AIscendTheme.Colors.textPrimary : Color.black)
-                                    .padding(.horizontal, AIscendTheme.Spacing.small)
-                                    .padding(.vertical, 10)
-                                    .background(
-                                        Capsule(style: .continuous)
-                                            .fill(image == nil ? Color.black.opacity(0.58) : AIscendTheme.Colors.accentGlow)
-                                    )
-                                    .padding(AIscendTheme.Spacing.medium)
-                                }
-
-                                if isLoading {
-                                    RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                        .fill(Color.black.opacity(0.35))
-
-                                    ProgressView()
-                                        .tint(AIscendTheme.Colors.accentGlow)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [
-                                                Color.white.opacity(0.36),
-                                                AIscendTheme.Colors.accentGlow.opacity(0.28)
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: 1
-                                    )
-                            )
-                            .shadow(color: AIscendTheme.Shadow.card, radius: 24, x: 0, y: 18)
-
-                            if canUseCamera {
-                                Button(action: startCameraCapture) {
-                                    AIscendButtonLabel(
-                                        title: image == nil ? "Take Photo" : "Retake Photo",
-                                        leadingSymbol: "camera.fill"
-                                    )
-                                }
-                                .buttonStyle(AIscendButtonStyle(variant: .primary))
-                            }
-
-                            PhotosPicker(
-                                selection: $pickerItem,
-                                matching: .images,
-                                preferredItemEncoding: .compatible
-                            ) {
-                                AIscendButtonLabel(
-                                    title: buttonTitle,
-                                    leadingSymbol: "photo.badge.plus"
-                                )
-                            }
-                            .buttonStyle(
-                                AIscendButtonStyle(variant: canUseCamera ? .secondary : .primary)
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                            AIscendSectionHeader(
+                                eyebrow: guide.title,
+                                title: title,
+                                subtitle: subtitle,
+                                prominence: .standard
                             )
 
-                            if let onContinue {
-                                Button(action: onContinue) {
-                                    AIscendButtonLabel(
-                                        title: "Continue",
-                                        leadingSymbol: "arrow.right"
-                                    )
-                                }
-                                .buttonStyle(AIscendButtonStyle(variant: .primary))
-                            }
+                            ScanCaptureHeroFrame(
+                                image: image,
+                                guide: guide,
+                                symbol: symbol,
+                                isLoading: isLoading
+                            )
+
+                            ScanCaptureGuidanceChips(guide: guide)
+
+                            ScanCaptureActionStack(
+                                image: image,
+                                buttonTitle: buttonTitle,
+                                canUseCamera: canUseCamera,
+                                pickerItem: $pickerItem,
+                                onStartCamera: startCameraCapture,
+                                onContinue: onContinue
+                            )
 
                             if let footnote, !footnote.isEmpty {
-                                Text(footnote)
-                                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                ScanCaptureInlineError(message: footnote)
                             }
                         }
-                        .padding(AIscendTheme.Spacing.medium)
-                        .background(
-                            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                                .fill(Color(hex: "111622").opacity(0.92))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-                        )
+                        .padding(AIscendTheme.Spacing.mediumLarge)
+                        .aiscendPanel(.elevated)
+                        .accessibilityElement(children: .contain)
                     }
                     .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity)
@@ -257,11 +156,15 @@ struct ScanCapturePageView: View {
             }
             .buttonStyle(.plain)
 
-            Text(title)
-                .font(.system(size: 26, weight: .bold, design: .rounded))
-                .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.72)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Face Scan")
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
+
+                Text(stepTitle)
+                    .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
 
             Spacer(minLength: 0)
 
@@ -383,7 +286,7 @@ private enum ScanPhotoImportLoader {
                 return data
             }
         } catch {
-            capturedError = error
+            capturedError = capturedError ?? error
         }
 
         if let capturedError {
@@ -503,6 +406,392 @@ private enum ScanPageCameraAlert: Int, Identifiable {
     }
 }
 
+private struct ScanCaptureProgressStrip: View {
+    let stepTitle: String
+    let guide: ScanCaptureGuide
+    let isReady: Bool
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.small) {
+            progressItem(title: "Front", symbol: "face.smiling", state: frontState)
+            progressItem(title: "Side", symbol: "person.crop.square", state: sideState)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(stepTitle), \(guide.title)")
+    }
+
+    private var frontState: ScanCaptureProgressState {
+        if guide == .front {
+            return isReady ? .ready : .active
+        }
+
+        return .ready
+    }
+
+    private var sideState: ScanCaptureProgressState {
+        if guide == .side {
+            return isReady ? .ready : .active
+        }
+
+        return .pending
+    }
+
+    private func progressItem(
+        title: String,
+        symbol: String,
+        state: ScanCaptureProgressState
+    ) -> some View {
+        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+            Image(systemName: state.symbolOverride ?? symbol)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(state.tint)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(state.fill))
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+
+                Text(state.label)
+                    .aiscendTextStyle(.caption, color: state.tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(AIscendTheme.Colors.surfaceGlass.opacity(state == .pending ? 0.42 : 0.78))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(state.border, lineWidth: 1)
+        )
+    }
+}
+
+private enum ScanCaptureProgressState: Equatable {
+    case active
+    case ready
+    case pending
+
+    var label: String {
+        switch self {
+        case .active:
+            return "Current"
+        case .ready:
+            return "Ready"
+        case .pending:
+            return "Next"
+        }
+    }
+
+    var symbolOverride: String? {
+        switch self {
+        case .ready:
+            return "checkmark"
+        case .active, .pending:
+            return nil
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .active:
+            return AIscendTheme.Colors.accentGlow
+        case .ready:
+            return AIscendTheme.Colors.success
+        case .pending:
+            return AIscendTheme.Colors.textMuted
+        }
+    }
+
+    var fill: Color {
+        switch self {
+        case .active:
+            return AIscendTheme.Colors.accentGlow.opacity(0.18)
+        case .ready:
+            return AIscendTheme.Colors.success.opacity(0.18)
+        case .pending:
+            return AIscendTheme.Colors.surfaceMuted.opacity(0.84)
+        }
+    }
+
+    var border: Color {
+        switch self {
+        case .active:
+            return AIscendTheme.Colors.accentGlow.opacity(0.38)
+        case .ready:
+            return AIscendTheme.Colors.success.opacity(0.32)
+        case .pending:
+            return AIscendTheme.Colors.borderSubtle
+        }
+    }
+}
+
+private struct ScanCaptureHeroFrame: View {
+    let image: UIImage?
+    let guide: ScanCaptureGuide
+    let symbol: String
+    let isLoading: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: "111821"),
+                            Color(hex: "15111E"),
+                            Color(hex: "0E1118")
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
+
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(0.18),
+                        .clear,
+                        Color.black.opacity(0.54)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                ScanGuideGrid()
+                    .stroke(Color.white.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [7, 9]))
+                    .padding(AIscendTheme.Spacing.medium)
+            } else {
+                ScanFaceGuidePlaceholder(guide: guide, symbol: symbol)
+                    .padding(AIscendTheme.Spacing.medium)
+            }
+
+            VStack {
+                HStack {
+                    statusBadge
+                    Spacer(minLength: 0)
+                }
+
+                Spacer(minLength: 0)
+
+                ScanCaptureInstructionPill(
+                    text: image == nil ? guide.instruction : "\(guide.title) loaded",
+                    isReady: image != nil
+                )
+            }
+            .padding(AIscendTheme.Spacing.medium)
+
+            if isLoading {
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                    .fill(Color.black.opacity(0.46))
+
+                ProgressView()
+                    .tint(AIscendTheme.Colors.accentGlow)
+                    .scaleEffect(1.12)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AIscendTheme.Radius.large, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.26),
+                            AIscendTheme.Colors.accentGlow.opacity(image == nil ? 0.18 : 0.42),
+                            Color.white.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: AIscendTheme.Shadow.card, radius: 24, x: 0, y: 18)
+    }
+
+    private var statusBadge: some View {
+        HStack(spacing: 7) {
+            Image(systemName: image == nil ? "viewfinder" : "checkmark.seal.fill")
+                .font(.system(size: 12, weight: .bold))
+
+            Text(image == nil ? "Align photo" : "Captured")
+                .aiscendTextStyle(.caption, color: image == nil ? AIscendTheme.Colors.textPrimary : Color.black)
+        }
+        .foregroundStyle(image == nil ? AIscendTheme.Colors.textPrimary : Color.black)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 8)
+        .background(
+            Capsule(style: .continuous)
+                .fill(image == nil ? Color.black.opacity(0.46) : AIscendTheme.Colors.success)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(image == nil ? 0.16 : 0), lineWidth: 1)
+        )
+    }
+}
+
+private struct ScanCaptureInstructionPill: View {
+    let text: String
+    let isReady: Bool
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+            Image(systemName: isReady ? "checkmark.circle.fill" : "scope")
+                .font(.system(size: 13, weight: .bold))
+
+            Text(text)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(isReady ? Color.black : AIscendTheme.Colors.textPrimary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, AIscendTheme.Spacing.small)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isReady ? AIscendTheme.Colors.accentMint : Color.black.opacity(0.58))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(isReady ? 0 : 0.14), lineWidth: 1)
+        )
+    }
+}
+
+private struct ScanCaptureGuidanceChips: View {
+    let guide: ScanCaptureGuide
+
+    private var tips: [(symbol: String, title: String)] {
+        switch guide {
+        case .front:
+            return [
+                ("sun.max.fill", "Even light"),
+                ("face.smiling", "Neutral face"),
+                ("viewfinder", "Centered")
+            ]
+        case .side:
+            return [
+                ("arrow.left.and.right", "90 degrees"),
+                ("person.crop.square", "Full profile"),
+                ("lightbulb.fill", "Clean outline")
+            ]
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+            ForEach(tips, id: \.title) { tip in
+                HStack(spacing: 6) {
+                    Image(systemName: tip.symbol)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AIscendTheme.Colors.accentGlow)
+
+                    Text(tip.title)
+                        .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .padding(.horizontal, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.58))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
+                )
+            }
+        }
+    }
+}
+
+private struct ScanCaptureActionStack: View {
+    let image: UIImage?
+    let buttonTitle: String
+    let canUseCamera: Bool
+    @Binding var pickerItem: PhotosPickerItem?
+    let onStartCamera: () -> Void
+    let onContinue: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: AIscendTheme.Spacing.small) {
+            if image != nil, let onContinue {
+                Button(action: onContinue) {
+                    AIscendButtonLabel(title: "Continue", trailingSymbol: "arrow.right")
+                }
+                .buttonStyle(AIscendButtonStyle(variant: .primary))
+            }
+
+            if canUseCamera {
+                Button(action: onStartCamera) {
+                    AIscendButtonLabel(
+                        title: image == nil ? "Take Photo" : "Retake",
+                        leadingSymbol: "camera.fill"
+                    )
+                }
+                .buttonStyle(AIscendButtonStyle(variant: image == nil ? .primary : .secondary))
+            }
+
+            PhotosPicker(
+                selection: $pickerItem,
+                matching: .images,
+                preferredItemEncoding: .compatible
+            ) {
+                AIscendButtonLabel(
+                    title: image == nil ? buttonTitle : "Replace",
+                    leadingSymbol: "photo.badge.plus"
+                )
+            }
+            .buttonStyle(AIscendButtonStyle(variant: canUseCamera || image != nil ? .secondary : .primary))
+        }
+    }
+}
+
+private struct ScanCaptureInlineError: View {
+    let message: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.xSmall) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(AIscendTheme.Colors.warning)
+                .padding(.top, 1)
+
+            Text(message)
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(AIscendTheme.Spacing.small)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(AIscendTheme.Colors.warning.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(AIscendTheme.Colors.warning.opacity(0.22), lineWidth: 1)
+        )
+    }
+}
+
 private struct ScanFaceGuidePlaceholder: View {
     let guide: ScanCaptureGuide
     let symbol: String
@@ -510,24 +799,20 @@ private struct ScanFaceGuidePlaceholder: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.black.opacity(0.94))
+
                 ScanGuideGrid()
-                    .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                    .stroke(Color.white.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [7, 8]))
+
+                ScanGuideMesh(guide: guide)
+                    .stroke(Color.white.opacity(0.30), lineWidth: 1)
 
                 ScanGuideLandmarks(guide: guide)
 
                 ScanFaceGuideShape(guide: guide)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color(hex: "1C2030"),
-                                Color(hex: "5B4A92")
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        style: StrokeStyle(lineWidth: max(3, geometry.size.width * 0.016), lineCap: .round, lineJoin: .round)
-                    )
-                    .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.18), radius: 10, x: 0, y: 8)
+                    .stroke(Color.white.opacity(0.92), style: StrokeStyle(lineWidth: max(1.6, geometry.size.width * 0.010), lineCap: .round, lineJoin: .round))
+                    .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.24), radius: 10, x: 0, y: 0)
 
                 VStack(spacing: 8) {
                     Image(systemName: symbol)
@@ -536,18 +821,95 @@ private struct ScanFaceGuidePlaceholder: View {
                     Text(guide.title)
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                 }
-                .foregroundStyle(Color(hex: "252635").opacity(0.72))
+                .foregroundStyle(Color.white.opacity(0.86))
                 .padding(.horizontal, AIscendTheme.Spacing.medium)
                 .padding(.vertical, AIscendTheme.Spacing.small)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(Color.white.opacity(0.46))
+                        .fill(Color.black.opacity(0.58))
+                        .overlay(Capsule(style: .continuous).stroke(Color.white.opacity(0.18), lineWidth: 1))
                 )
                 .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, AIscendTheme.Spacing.large)
             }
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .accessibilityHidden(true)
+    }
+}
+
+private struct ScanGuideMesh: Shape {
+    let guide: ScanCaptureGuide
+
+    func path(in rect: CGRect) -> Path {
+        switch guide {
+        case .front:
+            return frontMesh(in: rect)
+        case .side:
+            return sideMesh(in: rect)
+        }
+    }
+
+    private func frontMesh(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+
+        let points = [
+            CGPoint(x: 0.50, y: 0.08),
+            CGPoint(x: 0.23, y: 0.39),
+            CGPoint(x: 0.77, y: 0.39),
+            CGPoint(x: 0.31, y: 0.66),
+            CGPoint(x: 0.69, y: 0.66),
+            CGPoint(x: 0.50, y: 0.92),
+            CGPoint(x: 0.39, y: 0.42),
+            CGPoint(x: 0.61, y: 0.42),
+            CGPoint(x: 0.50, y: 0.54)
+        ].map { CGPoint(x: rect.minX + w * $0.x, y: rect.minY + h * $0.y) }
+
+        let lines = [
+            (0, 1), (0, 2), (1, 3), (2, 4), (3, 5), (4, 5),
+            (1, 8), (2, 8), (3, 8), (4, 8), (6, 8), (7, 8),
+            (3, 4), (6, 7)
+        ]
+
+        for line in lines {
+            path.move(to: points[line.0])
+            path.addLine(to: points[line.1])
+        }
+
+        return path
+    }
+
+    private func sideMesh(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+
+        let points = [
+            CGPoint(x: 0.48, y: 0.08),
+            CGPoint(x: 0.76, y: 0.18),
+            CGPoint(x: 0.82, y: 0.40),
+            CGPoint(x: 0.74, y: 0.54),
+            CGPoint(x: 0.79, y: 0.64),
+            CGPoint(x: 0.66, y: 0.78),
+            CGPoint(x: 0.36, y: 0.58),
+            CGPoint(x: 0.32, y: 0.32),
+            CGPoint(x: 0.52, y: 0.94)
+        ].map { CGPoint(x: rect.minX + w * $0.x, y: rect.minY + h * $0.y) }
+
+        let lines = [
+            (0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 8),
+            (7, 0), (7, 6), (6, 5), (6, 8), (6, 3), (6, 2),
+            (7, 2), (1, 3), (3, 5)
+        ]
+
+        for line in lines {
+            path.move(to: points[line.0])
+            path.addLine(to: points[line.1])
+        }
+
+        return path
     }
 }
 
@@ -558,23 +920,37 @@ private struct ScanGuideLandmarks: View {
         switch guide {
         case .front:
             return [
-                CGPoint(x: 0.38, y: 0.39),
-                CGPoint(x: 0.62, y: 0.39),
-                CGPoint(x: 0.50, y: 0.50),
-                CGPoint(x: 0.42, y: 0.58),
-                CGPoint(x: 0.58, y: 0.58),
-                CGPoint(x: 0.50, y: 0.67),
-                CGPoint(x: 0.33, y: 0.53),
-                CGPoint(x: 0.67, y: 0.53)
+                CGPoint(x: 0.50, y: 0.08),
+                CGPoint(x: 0.23, y: 0.39),
+                CGPoint(x: 0.77, y: 0.39),
+                CGPoint(x: 0.36, y: 0.41),
+                CGPoint(x: 0.44, y: 0.42),
+                CGPoint(x: 0.56, y: 0.42),
+                CGPoint(x: 0.64, y: 0.41),
+                CGPoint(x: 0.50, y: 0.52),
+                CGPoint(x: 0.42, y: 0.60),
+                CGPoint(x: 0.50, y: 0.64),
+                CGPoint(x: 0.58, y: 0.60),
+                CGPoint(x: 0.33, y: 0.70),
+                CGPoint(x: 0.50, y: 0.73),
+                CGPoint(x: 0.67, y: 0.70),
+                CGPoint(x: 0.37, y: 0.86),
+                CGPoint(x: 0.63, y: 0.86),
+                CGPoint(x: 0.50, y: 0.92)
             ]
         case .side:
             return [
-                CGPoint(x: 0.45, y: 0.22),
-                CGPoint(x: 0.60, y: 0.36),
-                CGPoint(x: 0.72, y: 0.47),
-                CGPoint(x: 0.62, y: 0.56),
-                CGPoint(x: 0.48, y: 0.70),
-                CGPoint(x: 0.35, y: 0.55)
+                CGPoint(x: 0.48, y: 0.08),
+                CGPoint(x: 0.76, y: 0.18),
+                CGPoint(x: 0.82, y: 0.40),
+                CGPoint(x: 0.72, y: 0.45),
+                CGPoint(x: 0.74, y: 0.54),
+                CGPoint(x: 0.79, y: 0.64),
+                CGPoint(x: 0.70, y: 0.71),
+                CGPoint(x: 0.66, y: 0.78),
+                CGPoint(x: 0.36, y: 0.58),
+                CGPoint(x: 0.32, y: 0.32),
+                CGPoint(x: 0.52, y: 0.94)
             ]
         }
     }
@@ -583,8 +959,9 @@ private struct ScanGuideLandmarks: View {
         GeometryReader { geometry in
             ForEach(Array(points.enumerated()), id: \.offset) { _, point in
                 Circle()
-                    .fill(AIscendTheme.Colors.accentGlow.opacity(0.66))
-                    .frame(width: 7, height: 7)
+                    .fill(Color.white.opacity(0.96))
+                    .frame(width: 7.5, height: 7.5)
+                    .shadow(color: Color.white.opacity(0.32), radius: 5, x: 0, y: 0)
                     .position(
                         x: geometry.size.width * point.x,
                         y: geometry.size.height * point.y
@@ -598,17 +975,15 @@ private struct ScanGuideLandmarks: View {
 private struct ScanGuideGrid: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let centerX = rect.midX
-        let centerY = rect.midY
+        for x in stride(from: 0.20, through: 0.80, by: 0.30) {
+            path.move(to: CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * 0.04))
+            path.addLine(to: CGPoint(x: rect.minX + rect.width * x, y: rect.maxY - rect.height * 0.04))
+        }
 
-        path.move(to: CGPoint(x: centerX, y: rect.minY + rect.height * 0.08))
-        path.addLine(to: CGPoint(x: centerX, y: rect.maxY - rect.height * 0.08))
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.12, y: centerY))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.12, y: centerY))
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.22, y: rect.minY + rect.height * 0.32))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.22, y: rect.minY + rect.height * 0.32))
-        path.move(to: CGPoint(x: rect.minX + rect.width * 0.24, y: rect.minY + rect.height * 0.68))
-        path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.24, y: rect.minY + rect.height * 0.68))
+        for y in stride(from: 0.18, through: 0.82, by: 0.16) {
+            path.move(to: CGPoint(x: rect.minX + rect.width * 0.06, y: rect.minY + rect.height * y))
+            path.addLine(to: CGPoint(x: rect.maxX - rect.width * 0.06, y: rect.minY + rect.height * y))
+        }
 
         return path
     }
@@ -631,32 +1006,78 @@ private struct ScanFaceGuideShape: Shape {
         let w = rect.width
         let h = rect.height
 
-        path.addEllipse(in: CGRect(
-            x: rect.minX + w * 0.26,
-            y: rect.minY + h * 0.15,
-            width: w * 0.48,
-            height: h * 0.53
-        ))
-
-        path.move(to: CGPoint(x: rect.minX + w * 0.38, y: rect.minY + h * 0.66))
+        path.move(to: CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.08))
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.66),
-            control1: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.75),
-            control2: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.75)
+            to: CGPoint(x: rect.minX + w * 0.78, y: rect.minY + h * 0.38),
+            control1: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.08),
+            control2: CGPoint(x: rect.minX + w * 0.77, y: rect.minY + h * 0.22)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.70, y: rect.minY + h * 0.70),
+            control1: CGPoint(x: rect.minX + w * 0.79, y: rect.minY + h * 0.52),
+            control2: CGPoint(x: rect.minX + w * 0.76, y: rect.minY + h * 0.63)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.92),
+            control1: CGPoint(x: rect.minX + w * 0.65, y: rect.minY + h * 0.82),
+            control2: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.91)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.30, y: rect.minY + h * 0.70),
+            control1: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.91),
+            control2: CGPoint(x: rect.minX + w * 0.35, y: rect.minY + h * 0.82)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.22, y: rect.minY + h * 0.38),
+            control1: CGPoint(x: rect.minX + w * 0.24, y: rect.minY + h * 0.63),
+            control2: CGPoint(x: rect.minX + w * 0.21, y: rect.minY + h * 0.52)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.08),
+            control1: CGPoint(x: rect.minX + w * 0.23, y: rect.minY + h * 0.22),
+            control2: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.08)
         )
 
-        path.move(to: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.79))
+        path.addEllipse(in: CGRect(x: rect.minX + w * 0.13, y: rect.minY + h * 0.38, width: w * 0.12, height: h * 0.22))
+        path.addEllipse(in: CGRect(x: rect.minX + w * 0.75, y: rect.minY + h * 0.38, width: w * 0.12, height: h * 0.22))
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.31, y: rect.minY + h * 0.39))
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.79),
-            control1: CGPoint(x: rect.minX + w * 0.40, y: rect.minY + h * 0.72),
-            control2: CGPoint(x: rect.minX + w * 0.60, y: rect.minY + h * 0.72)
+            to: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.39),
+            control1: CGPoint(x: rect.minX + w * 0.35, y: rect.minY + h * 0.34),
+            control2: CGPoint(x: rect.minX + w * 0.43, y: rect.minY + h * 0.34)
+        )
+        path.move(to: CGPoint(x: rect.minX + w * 0.53, y: rect.minY + h * 0.39))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.69, y: rect.minY + h * 0.39),
+            control1: CGPoint(x: rect.minX + w * 0.57, y: rect.minY + h * 0.34),
+            control2: CGPoint(x: rect.minX + w * 0.65, y: rect.minY + h * 0.34)
         )
 
-        path.move(to: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.41))
-        path.addLine(to: CGPoint(x: rect.minX + w * 0.46, y: rect.minY + h * 0.41))
+        path.addEllipse(in: CGRect(x: rect.minX + w * 0.34, y: rect.minY + h * 0.41, width: w * 0.11, height: h * 0.06))
+        path.addEllipse(in: CGRect(x: rect.minX + w * 0.55, y: rect.minY + h * 0.41, width: w * 0.11, height: h * 0.06))
 
-        path.move(to: CGPoint(x: rect.minX + w * 0.54, y: rect.minY + h * 0.41))
-        path.addLine(to: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.41))
+        path.move(to: CGPoint(x: rect.minX + w * 0.50, y: rect.minY + h * 0.46))
+        path.addLine(to: CGPoint(x: rect.minX + w * 0.43, y: rect.minY + h * 0.62))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.57, y: rect.minY + h * 0.62),
+            control1: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.66),
+            control2: CGPoint(x: rect.minX + w * 0.53, y: rect.minY + h * 0.66)
+        )
+        path.closeSubpath()
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.32, y: rect.minY + h * 0.70))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.68, y: rect.minY + h * 0.70),
+            control1: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.78),
+            control2: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.78)
+        )
+        path.move(to: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.72))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.72),
+            control1: CGPoint(x: rect.minX + w * 0.43, y: rect.minY + h * 0.68),
+            control2: CGPoint(x: rect.minX + w * 0.57, y: rect.minY + h * 0.68)
+        )
 
         return path
     }
@@ -666,48 +1087,63 @@ private struct ScanFaceGuideShape: Shape {
         let w = rect.width
         let h = rect.height
 
-        path.move(to: CGPoint(x: rect.minX + w * 0.45, y: rect.minY + h * 0.14))
+        path.move(to: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.08))
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.55),
-            control1: CGPoint(x: rect.minX + w * 0.20, y: rect.minY + h * 0.16),
-            control2: CGPoint(x: rect.minX + w * 0.20, y: rect.minY + h * 0.45)
+            to: CGPoint(x: rect.minX + w * 0.77, y: rect.minY + h * 0.17),
+            control1: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.06),
+            control2: CGPoint(x: rect.minX + w * 0.74, y: rect.minY + h * 0.10)
         )
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.70),
-            control1: CGPoint(x: rect.minX + w * 0.35, y: rect.minY + h * 0.63),
-            control2: CGPoint(x: rect.minX + w * 0.39, y: rect.minY + h * 0.68)
+            to: CGPoint(x: rect.minX + w * 0.84, y: rect.minY + h * 0.41),
+            control1: CGPoint(x: rect.minX + w * 0.82, y: rect.minY + h * 0.25),
+            control2: CGPoint(x: rect.minX + w * 0.82, y: rect.minY + h * 0.35)
         )
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.74, y: rect.minY + h * 0.61),
-            control1: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.72),
-            control2: CGPoint(x: rect.minX + w * 0.68, y: rect.minY + h * 0.66)
-        )
-        path.addLine(to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.56))
-        path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.72, y: rect.minY + h * 0.47),
-            control1: CGPoint(x: rect.minX + w * 0.70, y: rect.minY + h * 0.55),
-            control2: CGPoint(x: rect.minX + w * 0.76, y: rect.minY + h * 0.52)
+            to: CGPoint(x: rect.minX + w * 0.74, y: rect.minY + h * 0.54),
+            control1: CGPoint(x: rect.minX + w * 0.78, y: rect.minY + h * 0.45),
+            control2: CGPoint(x: rect.minX + w * 0.73, y: rect.minY + h * 0.49)
         )
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.63, y: rect.minY + h * 0.39),
-            control1: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.44),
-            control2: CGPoint(x: rect.minX + w * 0.64, y: rect.minY + h * 0.42)
+            to: CGPoint(x: rect.minX + w * 0.82, y: rect.minY + h * 0.64),
+            control1: CGPoint(x: rect.minX + w * 0.80, y: rect.minY + h * 0.58),
+            control2: CGPoint(x: rect.minX + w * 0.84, y: rect.minY + h * 0.61)
         )
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.45, y: rect.minY + h * 0.14),
-            control1: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.25),
-            control2: CGPoint(x: rect.minX + w * 0.60, y: rect.minY + h * 0.15)
+            to: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.78),
+            control1: CGPoint(x: rect.minX + w * 0.77, y: rect.minY + h * 0.70),
+            control2: CGPoint(x: rect.minX + w * 0.72, y: rect.minY + h * 0.75)
         )
-
-        path.move(to: CGPoint(x: rect.minX + w * 0.38, y: rect.minY + h * 0.70))
         path.addCurve(
-            to: CGPoint(x: rect.minX + w * 0.66, y: rect.minY + h * 0.88),
-            control1: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.80),
-            control2: CGPoint(x: rect.minX + w * 0.55, y: rect.minY + h * 0.88)
+            to: CGPoint(x: rect.minX + w * 0.34, y: rect.minY + h * 0.58),
+            control1: CGPoint(x: rect.minX + w * 0.53, y: rect.minY + h * 0.76),
+            control2: CGPoint(x: rect.minX + w * 0.42, y: rect.minY + h * 0.68)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.47, y: rect.minY + h * 0.08),
+            control1: CGPoint(x: rect.minX + w * 0.22, y: rect.minY + h * 0.36),
+            control2: CGPoint(x: rect.minX + w * 0.29, y: rect.minY + h * 0.12)
         )
 
-        path.move(to: CGPoint(x: rect.minX + w * 0.58, y: rect.minY + h * 0.36))
-        path.addLine(to: CGPoint(x: rect.minX + w * 0.62, y: rect.minY + h * 0.36))
+        path.addEllipse(in: CGRect(x: rect.minX + w * 0.27, y: rect.minY + h * 0.32, width: w * 0.16, height: h * 0.18))
+
+        path.move(to: CGPoint(x: rect.minX + w * 0.67, y: rect.minY + h * 0.39))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.75, y: rect.minY + h * 0.39),
+            control1: CGPoint(x: rect.minX + w * 0.70, y: rect.minY + h * 0.36),
+            control2: CGPoint(x: rect.minX + w * 0.73, y: rect.minY + h * 0.36)
+        )
+        path.move(to: CGPoint(x: rect.minX + w * 0.74, y: rect.minY + h * 0.52))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.83, y: rect.minY + h * 0.52),
+            control1: CGPoint(x: rect.minX + w * 0.78, y: rect.minY + h * 0.49),
+            control2: CGPoint(x: rect.minX + w * 0.81, y: rect.minY + h * 0.50)
+        )
+        path.move(to: CGPoint(x: rect.minX + w * 0.74, y: rect.minY + h * 0.62))
+        path.addCurve(
+            to: CGPoint(x: rect.minX + w * 0.82, y: rect.minY + h * 0.62),
+            control1: CGPoint(x: rect.minX + w * 0.77, y: rect.minY + h * 0.65),
+            control2: CGPoint(x: rect.minX + w * 0.80, y: rect.minY + h * 0.65)
+        )
 
         return path
     }

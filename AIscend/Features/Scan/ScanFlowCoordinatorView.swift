@@ -9,6 +9,7 @@ struct ScanFlowCoordinatorView: View {
     let session: AuthSessionStore
     let isPremium: Bool
     let onOpenRoutine: () -> Void
+    let onOpenGlowUpPlan: (PersistedScanRecord) -> Void
     let onOpenChat: () -> Void
     let onReturnHome: () -> Void
     let onDismiss: () -> Void
@@ -24,6 +25,7 @@ struct ScanFlowCoordinatorView: View {
         notificationManager: NotificationManager,
         isPremium: Bool = false,
         onOpenRoutine: @escaping () -> Void = {},
+        onOpenGlowUpPlan: @escaping (PersistedScanRecord) -> Void = { _ in },
         onOpenChat: @escaping () -> Void = {},
         onReturnHome: @escaping () -> Void = {},
         onDismiss: @escaping () -> Void = {}
@@ -31,6 +33,7 @@ struct ScanFlowCoordinatorView: View {
         self.session = session
         self.isPremium = isPremium
         self.onOpenRoutine = onOpenRoutine
+        self.onOpenGlowUpPlan = onOpenGlowUpPlan
         self.onOpenChat = onOpenChat
         self.onReturnHome = onReturnHome
         self.onDismiss = onDismiss
@@ -47,6 +50,7 @@ struct ScanFlowCoordinatorView: View {
             notificationManager: notificationManager,
             isPremium: isPremium,
             onOpenRoutine: onOpenRoutine,
+            onOpenGlowUpPlan: onOpenGlowUpPlan,
             onOpenChat: onOpenChat,
             onReturnHome: onReturnHome,
             onDismiss: onDismiss

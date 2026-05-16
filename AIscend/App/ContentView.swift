@@ -55,7 +55,13 @@ struct ContentView: View {
                 EntrySlideshowOnboardingView(model: model)
             }
         case .signedIn:
-            AppShellView(model: model, session: session)
+            if !model.hasCompletedEntryIntro {
+                EntrySlideshowOnboardingView(model: model)
+            } else if !model.hasCompletedEntryOnboarding {
+                EntryOnboardingFlowView(model: model)
+            } else {
+                AppShellView(model: model, session: session)
+            }
         }
     }
 

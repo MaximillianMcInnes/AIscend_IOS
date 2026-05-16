@@ -30,7 +30,7 @@ enum ElectrolyteBalanceState: String, CaseIterable, Codable, Identifiable, Senda
         case .lowSodiumHighWater:
             "Low Sodium"
         case .unknown:
-            "Unknown"
+            "Not Logged"
         }
     }
 }

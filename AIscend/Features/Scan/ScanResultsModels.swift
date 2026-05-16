@@ -167,9 +167,9 @@ struct ScanScores: Codable, Hashable, Sendable {
         overall = Self.number(for: ["overall", "Overall"], in: object)
         potential = Self.number(for: ["potential", "Potential"], in: object)
         eyes = Self.number(for: ["eyes", "Eyes"], in: object)
-        skin = Self.number(for: ["skin", "Skin"], in: object)
+        skin = Self.number(for: ["skin", "Skin", "skin_score", "skinScore"], in: object)
         jaw = Self.number(for: ["jaw", "Jaw"], in: object)
-        side = Self.number(for: ["side", "Side"], in: object)
+        side = Self.number(for: ["side", "Side", "side_profile", "sideProfile", "side_profile_score", "sideProfileScore"], in: object)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -235,7 +235,7 @@ struct ScanResultMeta: Codable, Hashable, Sendable {
         frontUrl = Self.string(for: ["frontUrl", "frontURL", "front_url", "frontImageUrl"], in: values)
         sideUrl = Self.string(for: ["sideUrl", "sideURL", "side_url", "sideImageUrl"], in: values)
         email = Self.string(for: ["email", "Email"], in: values)
-        type = Self.string(for: ["type", "scanType", "access"], in: values)
+        type = Self.string(for: ["type", "scanType", "Scantype", "access", "subscription"], in: values)
         scanId = Self.string(for: ["scanId", "scanID", "id"], in: values)
         source = Self.string(for: ["source", "origin"], in: values)
     }
@@ -316,19 +316,28 @@ struct ScanPayload: Codable, Hashable, Sendable {
             partialResult[key.stringValue] = (try? container.decode(ScanJSONValue.self, forKey: key)) ?? .null
         }
 
-        let scoreObject = rawValues["Scores"]?.objectValue
-            ?? rawValues["scores"]?.objectValue
+        let payloadValues = Self.payloadRoot(from: rawValues)
+        let scoreObject = payloadValues["Scores"]?.objectValue
+            ?? payloadValues["scores"]?.objectValue
             ?? [:]
+
+        var frontProfile = payloadValues["front_profile"]?.objectValue
+            ?? payloadValues["frontProfile"]?.objectValue
+            ?? [:]
+        let sideProfile = Self.bestObject(
+            from: [
+                payloadValues["side_profile"]?.objectValue,
+                payloadValues["sideProfile"]?.objectValue
+            ]
+        )
+
+        Self.mergeSkinSignals(from: payloadValues, into: &frontProfile)
 
         self.init(
             scores: ScanScores(object: scoreObject),
-            frontProfile: rawValues["front_profile"]?.objectValue
-                ?? rawValues["frontProfile"]?.objectValue
-                ?? [:],
-            sideProfile: rawValues["side_profile"]?.objectValue
-                ?? rawValues["sideProfile"]?.objectValue
-                ?? [:],
-            raw: rawValues
+            frontProfile: frontProfile,
+            sideProfile: sideProfile,
+            raw: payloadValues
         )
     }
 
@@ -342,6 +351,56 @@ struct ScanPayload: Codable, Hashable, Sendable {
         for (key, value) in encoded {
             try container.encode(value, forKey: .required(key))
         }
+    }
+
+    private static func bestObject(from candidates: [[String: ScanJSONValue]?]) -> [String: ScanJSONValue] {
+        candidates
+            .compactMap { $0 }
+            .first(where: { !$0.isEmpty }) ?? [:]
+    }
+
+    private static func payloadRoot(from rawValues: [String: ScanJSONValue]) -> [String: ScanJSONValue] {
+        if let dataObject = rawValues["data"]?.objectValue, looksLikeScanPayload(dataObject) {
+            return dataObject
+        }
+
+        return rawValues
+    }
+
+    private static func looksLikeScanPayload(_ object: [String: ScanJSONValue]) -> Bool {
+        object["Scores"] != nil
+        || object["scores"] != nil
+        || object["front_profile"] != nil
+        || object["frontProfile"] != nil
+        || object["side_profile"] != nil
+        || object["sideProfile"] != nil
+    }
+
+    private static func mergeSkinSignals(
+        from rawValues: [String: ScanJSONValue],
+        into frontProfile: inout [String: ScanJSONValue]
+    ) {
+        var skinProfile = frontProfile["skin"]?.objectValue ?? [:]
+
+        for key in ["Acne_level", "acne_level", "acneLevel"] {
+            if let value = rawValues[key] {
+                skinProfile["acne_level"] = value
+                break
+            }
+        }
+
+        for key in ["Skin_features", "skin_features", "skinFeatures"] {
+            if let value = rawValues[key] {
+                skinProfile["features"] = value
+                break
+            }
+        }
+
+        guard !skinProfile.isEmpty else {
+            return
+        }
+
+        frontProfile["skin"] = .object(skinProfile)
     }
 }
 
@@ -650,7 +709,7 @@ extension ScanScores {
         }
 
         if let skin {
-            object["Skin"] = .number(skin)
+            object["skin"] = .number(skin)
         }
 
         if let jaw {
@@ -658,7 +717,7 @@ extension ScanScores {
         }
 
         if let side {
-            object["Side"] = .number(side)
+            object["side_profile"] = .number(side)
         }
 
         return object

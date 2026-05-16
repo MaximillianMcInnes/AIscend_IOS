@@ -44,313 +44,39 @@ struct HydrationTrackingView: View {
     @ObservedObject var electrolyteStore: ElectrolyteTrackingStore
     var onOpenChat: (String) -> Void
 
-    @State private var showingCustomEntrySheet = false
-    @State private var showingTargetSheet = false
-    @State private var highlightedQuickAdd: Int?
-
-    private var baseWaterSummary: WaterDailySummary {
-        store.todaySummary()
+    private var drinkDaySummary: HydrationDaySummary {
+        store.todayHydrationSummary
     }
 
-    private var electrolyteSummary: ElectrolyteDailySummary {
-        electrolyteStore.todaySummary(waterIntakeMl: baseWaterSummary.totalWaterMl)
-    }
-
-    private var waterSummary: WaterDailySummary {
-        store.todaySummary(electrolyteSummary: electrolyteSummary)
-    }
-
-    private var combinedInsight: String {
-        store.combinedInsight(electrolyteSummary: electrolyteSummary)
-    }
-
-    private var lastPreset: ElectrolytePreset? {
-        electrolyteStore.lastSelectedPreset()
+    private var hydrationState: HydrationState {
+        store.engine.evaluateState(
+            totalWaterMl: drinkDaySummary.hydrationCreditMl,
+            targetWaterMl: drinkDaySummary.targetHydrationMl
+        )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            header
-            heroCard
-            waterLoggingCard
-            ElectrolyteTrackingView(
-                store: electrolyteStore,
-                waterIntakeMl: waterSummary.totalWaterMl,
-                onOpenChat: onOpenChat
+            HydrationPageHeader(
+                summary: drinkDaySummary,
+                hydrationState: hydrationState
             )
-            aiSupportCard
-        }
-        .sheet(isPresented: $showingCustomEntrySheet) {
-            HydrationCustomAmountSheet(store: store)
-        }
-        .sheet(isPresented: $showingTargetSheet) {
-            HydrationTargetEditorSheet(store: store, currentTargetMl: waterSummary.targetWaterMl)
-        }
-    }
 
-    private var header: some View {
-        AIscendSectionHeader(
-            eyebrow: "Hydration",
-            title: "Hydration",
-            subtitle: "Water intake, electrolyte support, and simple AI guidance in one premium view."
-        )
-    }
+            HydrationQuickWaterLogSection(store: store)
 
-    private var heroCard: some View {
-        DashboardGlassCard(tone: .hero) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                AIscendBadge(
-                    title: "Hero hydration summary",
-                    symbol: "drop.fill",
-                    style: .accent
-                )
+            DrinkSearchView(
+                store: store,
+                electrolyteStore: electrolyteStore
+            )
 
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: AIscendTheme.Spacing.xLarge) {
-                        HydrationProgressOrb(
-                            progress: waterSummary.progress,
-                            totalWaterMl: waterSummary.totalWaterMl,
-                            targetWaterMl: waterSummary.targetWaterMl,
-                            state: waterSummary.hydrationState
-                        )
+            HydrationTodayTotalsSection(summary: drinkDaySummary)
 
-                        heroCopy
-                    }
+            HydrationTimelineSection(
+                store: store,
+                summary: drinkDaySummary
+            )
 
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                        HydrationProgressOrb(
-                            progress: waterSummary.progress,
-                            totalWaterMl: waterSummary.totalWaterMl,
-                            targetWaterMl: waterSummary.targetWaterMl,
-                            state: waterSummary.hydrationState
-                        )
-
-                        heroCopy
-                    }
-                }
-            }
-        }
-    }
-
-    private var heroCopy: some View {
-        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-            HStack(spacing: AIscendTheme.Spacing.small) {
-                HydrationStatePill(state: waterSummary.hydrationState)
-                ElectrolyteBalancePill(state: electrolyteSummary.balanceState)
-            }
-
-            Text(HydrationTrackingEngine.formatWater(waterSummary.totalWaterMl, prefersCompact: true))
-                .aiscendTextStyle(.screenTitle, color: AIscendTheme.Colors.textPrimary)
-
-            Text("Target \(HydrationTrackingEngine.formatWater(waterSummary.targetWaterMl, prefersCompact: true))")
-                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-
-            Text(waterSummary.shortInsight)
-                .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-
-            Text(combinedInsight)
-                .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textMuted)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var waterLoggingCard: some View {
-        DashboardGlassCard(tone: .standard) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                        Text("Water")
-                            .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
-
-                        Text("Fast logging, custom amounts, and a target you can tune without friction.")
-                            .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Button {
-                        showingTargetSheet = true
-                    } label: {
-                        AIscendBadge(
-                            title: "Edit target",
-                            symbol: "slider.horizontal.3",
-                            style: .neutral
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AIscendTheme.Spacing.small) {
-                    ForEach(store.quickAddAmountsMl, id: \.self) { amount in
-                        Button {
-                            withAnimation(AIscendTheme.Motion.reveal) {
-                                store.addWater(amountMl: amount, sourceName: "Quick add")
-                            }
-                            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                            highlightedQuickAdd = amount
-                            resetQuickAddHighlight()
-                        } label: {
-                            HydrationQuickAddButton(amountMl: amount, highlighted: highlightedQuickAdd == amount)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        waterSecondaryButton(
-                            title: "Custom amount",
-                            symbol: "plus.circle.fill",
-                            action: { showingCustomEntrySheet = true }
-                        )
-
-                        waterSecondaryButton(
-                            title: "Undo last",
-                            symbol: "arrow.uturn.backward",
-                            action: { store.removeLastEntry() }
-                        )
-                        .opacity(store.recentEntries(limit: 1).isEmpty ? 0.5 : 1)
-                        .disabled(store.recentEntries(limit: 1).isEmpty)
-                    }
-
-                    VStack(spacing: AIscendTheme.Spacing.small) {
-                        waterSecondaryButton(
-                            title: "Custom amount",
-                            symbol: "plus.circle.fill",
-                            action: { showingCustomEntrySheet = true }
-                        )
-
-                        waterSecondaryButton(
-                            title: "Undo last",
-                            symbol: "arrow.uturn.backward",
-                            action: { store.removeLastEntry() }
-                        )
-                        .opacity(store.recentEntries(limit: 1).isEmpty ? 0.5 : 1)
-                        .disabled(store.recentEntries(limit: 1).isEmpty)
-                    }
-                }
-
-                if !store.recentEntries(limit: 3).isEmpty {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
-                        Text("Recent water logs")
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
-
-                        VStack(spacing: AIscendTheme.Spacing.small) {
-                            ForEach(store.recentEntries(limit: 3)) { entry in
-                                HydrationRecentWaterEntryRow(entry: entry) {
-                                    withAnimation(AIscendTheme.Motion.soft) {
-                                        store.delete(entry)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var aiSupportCard: some View {
-        DashboardGlassCard(tone: .subtle) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                Text("AI help")
-                    .aiscendTextStyle(.sectionTitle, color: AIscendTheme.Colors.textPrimary)
-
-                Text("If you are unsure what to log or whether your balance looks reasonable, jump straight into chat instead of digging through extra screens.")
-                    .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        hydrationAIButton(
-                            title: "Ask AI",
-                            symbol: "message.fill",
-                            prompt: store.combinedPrompt(
-                                intent: .askAI,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-
-                        hydrationAIButton(
-                            title: "Estimate for me",
-                            symbol: "sparkles",
-                            prompt: store.combinedPrompt(
-                                intent: .estimate,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-
-                        hydrationAIButton(
-                            title: "Why does this matter?",
-                            symbol: "questionmark.circle.fill",
-                            prompt: store.combinedPrompt(
-                                intent: .explain,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-                    }
-
-                    VStack(spacing: AIscendTheme.Spacing.small) {
-                        hydrationAIButton(
-                            title: "Ask AI",
-                            symbol: "message.fill",
-                            prompt: store.combinedPrompt(
-                                intent: .askAI,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-
-                        hydrationAIButton(
-                            title: "Estimate for me",
-                            symbol: "sparkles",
-                            prompt: store.combinedPrompt(
-                                intent: .estimate,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-
-                        hydrationAIButton(
-                            title: "Why does this matter?",
-                            symbol: "questionmark.circle.fill",
-                            prompt: store.combinedPrompt(
-                                intent: .explain,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: lastPreset
-                            )
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func waterSecondaryButton(
-        title: String,
-        symbol: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            AIscendButtonLabel(title: title, leadingSymbol: symbol)
-        }
-        .buttonStyle(AIscendButtonStyle(variant: .ghost))
-    }
-
-    private func hydrationAIButton(title: String, symbol: String, prompt: String) -> some View {
-        Button {
-            onOpenChat(prompt)
-        } label: {
-            AIscendButtonLabel(title: title, leadingSymbol: symbol)
-        }
-        .buttonStyle(AIscendButtonStyle(variant: .secondary))
-    }
-
-    private func resetQuickAddHighlight() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
-            highlightedQuickAdd = nil
+            HydrationSmartSuggestionCard(summary: drinkDaySummary)
         }
     }
 }
@@ -361,149 +87,159 @@ struct HydrationDashboardCard: View {
     let onOpenHydration: () -> Void
     let onOpenChat: (String) -> Void
 
-    private var baseWaterSummary: WaterDailySummary {
-        store.todaySummary()
+    private var summary: HydrationDaySummary {
+        store.todayHydrationSummary
     }
 
-    private var electrolyteSummary: ElectrolyteDailySummary {
-        electrolyteStore.todaySummary(waterIntakeMl: baseWaterSummary.totalWaterMl)
+    private var hydrationState: HydrationState {
+        store.engine.evaluateState(
+            totalWaterMl: summary.hydrationCreditMl,
+            targetWaterMl: summary.targetHydrationMl
+        )
     }
 
-    private var waterSummary: WaterDailySummary {
-        store.todaySummary(electrolyteSummary: electrolyteSummary)
-    }
+    private var lastDrinkText: String {
+        guard let lastLog = summary.logs.first else {
+            return "No drinks logged yet"
+        }
 
-    private var combinedInsight: String {
-        store.combinedInsight(electrolyteSummary: electrolyteSummary)
+        return "\(lastLog.drinkName) · \(HydrationTrackingEngine.formatWater(lastLog.amountMl, prefersCompact: true))"
     }
 
     var body: some View {
-        DashboardGlassCard(tone: .standard) {
-            VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
-                HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                        Text("Hydration")
-                            .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
+        Button(action: onOpenHydration) {
+            DashboardGlassCard(tone: .standard) {
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.mediumLarge) {
+                    HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
+                        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                            Text("Hydration")
+                                .aiscendTextStyle(.cardTitle, color: AIscendTheme.Colors.textPrimary)
 
-                        Text("Water + electrolyte support")
-                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
-                    }
-
-                    Spacer(minLength: 0)
-
-                    Button(action: onOpenHydration) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(AIscendTheme.Colors.textPrimary)
-                            .padding(10)
-                            .background(
-                                Circle()
-                                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.84))
-                            )
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    HydrationStatePill(state: waterSummary.hydrationState)
-                    ElectrolyteBalancePill(state: electrolyteSummary.balanceState)
-                }
-
-                Text(combinedInsight)
-                    .aiscendTextStyle(.body, color: AIscendTheme.Colors.textSecondary)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: AIscendTheme.Spacing.small) {
-                        HydrationCompactMetric(
-                            title: "Water",
-                            value: "\(HydrationTrackingEngine.formatWater(waterSummary.totalWaterMl, prefersCompact: true)) / \(HydrationTrackingEngine.formatWater(waterSummary.targetWaterMl, prefersCompact: true))"
-                        )
-
-                        HydrationCompactMetric(
-                            title: "Electrolytes",
-                            value: electrolyteSummary.balanceState.title
-                        )
-                    }
-
-                    VStack(spacing: AIscendTheme.Spacing.small) {
-                        HydrationCompactMetric(
-                            title: "Water",
-                            value: "\(HydrationTrackingEngine.formatWater(waterSummary.totalWaterMl, prefersCompact: true)) / \(HydrationTrackingEngine.formatWater(waterSummary.targetWaterMl, prefersCompact: true))"
-                        )
-
-                        HydrationCompactMetric(
-                            title: "Electrolytes",
-                            value: electrolyteSummary.balanceState.title
-                        )
-                    }
-                }
-
-                HStack(spacing: AIscendTheme.Spacing.small) {
-                    Menu {
-                        ForEach(store.quickAddAmountsMl, id: \.self) { amount in
-                            Button("+\(amount)ml") {
-                                store.addWater(amountMl: amount, sourceName: "Quick add")
-                                UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-                            }
+                            Text("All drink logs today")
+                                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
                         }
 
-                        Divider()
+                        Spacer(minLength: 0)
 
-                        Button("Open Hydration") {
-                            onOpenHydration()
-                        }
-                    } label: {
                         HStack(spacing: AIscendTheme.Spacing.xSmall) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("Quick add")
+                            Text("Track")
                                 .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(AIscendTheme.Colors.textPrimary)
                         }
                         .padding(.horizontal, AIscendTheme.Spacing.medium)
-                        .padding(.vertical, AIscendTheme.Spacing.small)
+                        .padding(.vertical, AIscendTheme.Spacing.xSmall)
                         .background(
                             Capsule(style: .continuous)
                                 .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.86))
                         )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(AIscendTheme.Colors.borderSubtle, lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
 
-                    Button {
-                        onOpenChat(
-                            store.combinedPrompt(
-                                intent: .estimate,
-                                electrolyteSummary: electrolyteSummary,
-                                lastSelectedPreset: electrolyteStore.lastSelectedPreset()
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        HydrationStatePill(state: hydrationState)
+                        ElectrolyteBalancePill(state: summary.electrolyteBalanceStatus)
+                    }
+
+                    HydrationDashboardProgressBar(progress: summary.dailyGoalProgress)
+
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: AIscendTheme.Spacing.small) {
+                            HydrationCompactMetric(
+                                title: "Credit",
+                                value: "\(HydrationTrackingEngine.formatWater(summary.hydrationCreditMl, prefersCompact: true)) / \(HydrationTrackingEngine.formatWater(summary.targetHydrationMl, prefersCompact: true))"
                             )
-                        )
-                    } label: {
-                        HStack(spacing: AIscendTheme.Spacing.xSmall) {
-                            Image(systemName: "message.fill")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Ask AI")
-                                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
-                        }
-                        .padding(.horizontal, AIscendTheme.Spacing.medium)
-                        .padding(.vertical, AIscendTheme.Spacing.small)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(AIscendTheme.Colors.surfaceInteractive.opacity(0.84))
-                        )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(AIscendTheme.Colors.accentGlow.opacity(0.18), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
 
-                    Spacer(minLength: 0)
+                            HydrationCompactMetric(
+                                title: "Water-only",
+                                value: HydrationTrackingEngine.formatWater(summary.waterOnlyMl, prefersCompact: true)
+                            )
+
+                            HydrationCompactMetric(
+                                title: "Fluid",
+                                value: HydrationTrackingEngine.formatWater(summary.totalFluidMl, prefersCompact: true)
+                            )
+                        }
+
+                        VStack(spacing: AIscendTheme.Spacing.small) {
+                            HydrationCompactMetric(
+                                title: "Credit",
+                                value: "\(HydrationTrackingEngine.formatWater(summary.hydrationCreditMl, prefersCompact: true)) / \(HydrationTrackingEngine.formatWater(summary.targetHydrationMl, prefersCompact: true))"
+                            )
+
+                            HydrationCompactMetric(
+                                title: "Water-only",
+                                value: HydrationTrackingEngine.formatWater(summary.waterOnlyMl, prefersCompact: true)
+                            )
+
+                            HydrationCompactMetric(
+                                title: "Fluid",
+                                value: HydrationTrackingEngine.formatWater(summary.totalFluidMl, prefersCompact: true)
+                            )
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+                        Text(lastDrinkText)
+                            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
+                            .lineLimit(1)
+
+                        HStack(spacing: AIscendTheme.Spacing.xSmall) {
+                            HydrationDashboardElectrolyteChip(title: "Na", value: summary.sodiumMg, tint: AIscendTheme.Colors.accentAmber)
+                            HydrationDashboardElectrolyteChip(title: "K", value: summary.potassiumMg, tint: AIscendTheme.Colors.accentMint)
+                            HydrationDashboardElectrolyteChip(title: "Mg", value: summary.magnesiumMg, tint: AIscendTheme.Colors.accentCyan)
+                        }
+                    }
                 }
             }
         }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct HydrationDashboardProgressBar: View {
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(AIscendTheme.Colors.surfaceHighlight.opacity(0.68))
+
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [AIscendTheme.Colors.accentCyan, AIscendTheme.Colors.accentMint],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: proxy.size.width * min(max(progress, 0), 1))
+            }
+        }
+        .frame(height: 8)
+    }
+}
+
+private struct HydrationDashboardElectrolyteChip: View {
+    let title: String
+    let value: Int
+    let tint: Color
+
+    var body: some View {
+        Text("\(title) \(value)mg")
+            .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, AIscendTheme.Spacing.small)
+            .padding(.vertical, AIscendTheme.Spacing.xSmall)
+            .background(Capsule(style: .continuous).fill(tint.opacity(0.12)))
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(tint.opacity(0.2), lineWidth: 1)
+            )
     }
 }
 
@@ -619,7 +355,7 @@ private struct HydrationProgressOrb: View {
     }
 }
 
-private struct HydrationQuickAddButton: View {
+struct HydrationQuickAddButton: View {
     let amountMl: Int
     let highlighted: Bool
 
@@ -861,5 +597,53 @@ private struct HydrationNumericEntrySheet: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(30)
         .presentationBackground(.ultraThinMaterial)
+    }
+}
+
+#Preview("Hydration Tracking") {
+    HydrationTrackingPreviewContainer()
+}
+
+private struct HydrationTrackingPreviewContainer: View {
+    @StateObject private var store: HydrationTrackingStore
+    @StateObject private var electrolyteStore = ElectrolyteTrackingStore(
+        defaults: UserDefaults(suiteName: "HydrationTrackingPreviewElectrolytes") ?? .standard
+    )
+
+    init() {
+        let defaults = UserDefaults(suiteName: "HydrationTrackingPreview-\(UUID().uuidString)") ?? .standard
+        _store = StateObject(wrappedValue: HydrationTrackingStore(defaults: defaults))
+    }
+
+    var body: some View {
+        ZStack {
+            AIscendBackdrop()
+            DashboardAmbientLayer()
+
+            ScrollView(showsIndicators: false) {
+                HydrationTrackingView(
+                    store: store,
+                    electrolyteStore: electrolyteStore,
+                    onOpenChat: { _ in }
+                )
+                .padding(.horizontal, AIscendTheme.Spacing.screenInset)
+                .padding(.top, AIscendTheme.Spacing.large)
+                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
+            }
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            seedPreviewLogsIfNeeded()
+        }
+    }
+
+    private func seedPreviewLogsIfNeeded() {
+        guard store.todayDrinkLogs().isEmpty else {
+            return
+        }
+
+        _ = store.logDrink(DrinkLibrary.shared.drink(id: "water") ?? DrinkLibrary.shared.popularDrinks()[0], amountMl: 500)
+        _ = store.logDrink(DrinkLibrary.shared.drink(id: "black-coffee") ?? DrinkLibrary.shared.popularDrinks()[7], amountMl: 240)
+        _ = store.logDrink(DrinkLibrary.shared.drink(id: "electrolyte-tablet-drink") ?? DrinkLibrary.shared.popularDrinks()[3], amountMl: 500)
     }
 }

@@ -12,6 +12,7 @@ struct ResultsFullscreenShell<TopRight: View, BottomCTA: View, Content: View>: V
     let total: Int
     let maxContentWidth: CGFloat
     let showsBottomCTA: Bool
+    let showsStepPill: Bool
     private let topRight: TopRight
     private let bottomCTA: BottomCTA
     private let content: Content
@@ -23,6 +24,7 @@ struct ResultsFullscreenShell<TopRight: View, BottomCTA: View, Content: View>: V
         total: Int,
         maxContentWidth: CGFloat = 520,
         showsBottomCTA: Bool = true,
+        showsStepPill: Bool = true,
         @ViewBuilder topRight: () -> TopRight,
         @ViewBuilder bottomCTA: () -> BottomCTA,
         @ViewBuilder content: () -> Content
@@ -33,6 +35,7 @@ struct ResultsFullscreenShell<TopRight: View, BottomCTA: View, Content: View>: V
         self.total = max(total, 1)
         self.maxContentWidth = maxContentWidth
         self.showsBottomCTA = showsBottomCTA
+        self.showsStepPill = showsStepPill
         self.topRight = topRight()
         self.bottomCTA = bottomCTA()
         self.content = content()
@@ -67,7 +70,9 @@ struct ResultsFullscreenShell<TopRight: View, BottomCTA: View, Content: View>: V
     private var header: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
             HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
-                ResultsStepPill(step: step, total: total)
+                if showsStepPill {
+                    ResultsStepPill(step: step, total: total)
+                }
 
                 Spacer(minLength: AIscendTheme.Spacing.small)
 

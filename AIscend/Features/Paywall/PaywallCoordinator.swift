@@ -36,7 +36,7 @@ enum PaywallVariant: String, Identifiable, Hashable, Sendable {
         case .rewardLoop:
             "Your next level is already visible"
         case .glowUpGate:
-            "Glow-up planning sits behind the full AIScend layer"
+            "Unlock with Premium"
         case .deepReport:
             "The complete report is ready to open"
         }
@@ -85,7 +85,7 @@ enum PaywallVariant: String, Identifiable, Hashable, Sendable {
     }
 
     var primaryTitle: String {
-        "Start Free Trial"
+        "Unlock Premium"
     }
 
     var secondaryTitle: String? {
@@ -93,7 +93,7 @@ enum PaywallVariant: String, Identifiable, Hashable, Sendable {
         case .lockedInsight, .rewardLoop, .deepReport:
             "Maybe Later"
         case .glowUpGate:
-            "Return To Results"
+            "Maybe Later"
         }
     }
 
@@ -129,9 +129,15 @@ final class PaywallCoordinator: ObservableObject {
         sourceKey: String? = nil,
         force: Bool = false
     ) {
+        if let sourceKey, shownKeys.contains(sourceKey), !force {
+            return
+        }
+
         if let sourceKey {
             shownKeys.insert(sourceKey)
         }
+
+        activePresentation = PaywallPresentation(variant: variant, isDismissable: dismissable)
     }
 
     func dismiss() {

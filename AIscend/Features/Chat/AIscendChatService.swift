@@ -44,15 +44,18 @@ actor AIscendChatService: AIscendChatServiceProtocol {
         ) else {
             throw AIscendChatError.missingEmail
         }
+        let isPremium = await MainActor.run { PremiumAccessManager.shared.isPremium }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("rag/query"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(identity.idToken)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 60
+        // Backend must verify the Firebase ID token and confirm Users/{uid}.isPremium or subscription == Paid server-side.
         request.httpBody = try JSONEncoder().encode(RAGRequest(
             user_message: message,
             email: chatIdentity.requestEmail,
+            subscription: isPremium ? "paid" : "free",
             filters: filters
         ))
 
@@ -115,6 +118,7 @@ private extension AIscendChatService {
     struct RAGRequest: Encodable {
         let user_message: String
         let email: String
+        let subscription: String
         let filters: AIscendChatFilters?
     }
 

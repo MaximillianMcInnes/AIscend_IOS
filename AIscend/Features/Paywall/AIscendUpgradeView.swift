@@ -35,11 +35,11 @@ struct AIscendUpgradePlan: Identifiable, Equatable {
                 id: .monthly,
                 title: "Pro Monthly",
                 badge: nil,
-                price: "$14.99",
+                price: "£5.99",
                 periodLabel: "per month",
                 secondaryLabel: "Flexible access with the full Pro layer.",
-                trialLabel: trialEligible ? "7 days free, then billed monthly." : "Starts immediately with monthly billing.",
-                billingDetail: trialEligible ? "Payment begins after your 7-day trial unless canceled beforehand." : "Billed every month until canceled in Settings.",
+                trialLabel: "Monthly premium access. Cancel anytime in Apple settings.",
+                billingDetail: "Billed monthly through Apple unless cancelled in Settings.",
                 highlight: "Full reports, advanced insights, and priority processing.",
                 savingsNote: nil,
                 benefitHighlights: [
@@ -53,11 +53,11 @@ struct AIscendUpgradePlan: Identifiable, Equatable {
                 id: .yearly,
                 title: "Pro Yearly",
                 badge: "Best Value",
-                price: "$89.99",
+                price: "£49.99",
                 periodLabel: "per year",
-                secondaryLabel: "Equivalent to $7.50 / month with the full Pro layer.",
-                trialLabel: trialEligible ? "7 days free, then billed yearly." : "Starts immediately with yearly billing.",
-                billingDetail: trialEligible ? "One yearly charge begins after trial ends unless canceled beforehand." : "Billed once per year. Cancel anytime in Settings.",
+                secondaryLabel: "Equivalent to about £4.17 / month with the full Pro layer.",
+                trialLabel: "Yearly premium access. Cancel anytime in Apple settings.",
+                billingDetail: "Billed yearly through Apple unless cancelled in Settings.",
                 highlight: "The strongest rate for deeper analysis and future Pro modules.",
                 savingsNote: "Save 50% vs monthly",
                 benefitHighlights: [
@@ -146,8 +146,7 @@ struct AIscendUpgradeFAQItem: Identifiable {
     let answer: String
 
     static let previewItems: [AIscendUpgradeFAQItem] = [
-        AIscendUpgradeFAQItem(question: "When does payment begin?", answer: "If a trial is active, payment begins after the trial ends unless you cancel beforehand. Without a trial, billing begins immediately after confirmation."),
-        AIscendUpgradeFAQItem(question: "How does the free trial work?", answer: "Your trial unlocks the full Pro layer immediately. You can explore advanced reports, premium tools, and deeper analysis before any paid renewal begins."),
+        AIscendUpgradeFAQItem(question: "When does payment begin?", answer: "Billing begins after Apple confirms the subscription. You can cancel anytime in Settings."),
         AIscendUpgradeFAQItem(question: "Can I cancel anytime?", answer: "Yes. You can manage or cancel your subscription in Apple account settings. Access continues through the current billing period."),
         AIscendUpgradeFAQItem(question: "Why is yearly the better value?", answer: "Yearly unlocks the same full Pro layer at a substantially lower effective monthly rate, which makes it the strongest long-term option if you plan to keep improving."),
         AIscendUpgradeFAQItem(question: "What happens after cancellation?", answer: "Your Pro access remains active until the current period ends. After that, the app returns to the free layer while preserving your account and prior data.")
@@ -181,7 +180,7 @@ struct AIscendUpgradeView: View {
     }
 
     private var purchaseReady: Bool {
-        onSubscribe != nil || premiumURL != nil
+        true
     }
 
     var body: some View {
@@ -263,11 +262,16 @@ struct AIscendUpgradeView: View {
             return
         }
 
-        guard let premiumURL else {
-            return
+        Task { @MainActor in
+            let productID: String
+            switch selectedPlan.id {
+            case .monthly:
+                productID = SubscriptionManager.ProductID.monthly
+            case .yearly:
+                productID = SubscriptionManager.ProductID.yearly
+            }
+            await SubscriptionManager.shared.purchase(productID: productID)
         }
-
-        openURL(premiumURL)
     }
 }
 
@@ -766,7 +770,7 @@ private struct MainUpgradeCard: View {
 
                     Button(action: onSubscribe) {
                         AIscendButtonLabel(
-                            title: purchaseReady ? "Start with \(plan.title)" : "Purchase link unavailable",
+                            title: purchaseReady ? "Unlock \(plan.title)" : "Payment unavailable",
                             leadingSymbol: purchaseReady ? "arrow.up.forward" : "exclamationmark.triangle.fill"
                         )
                     }

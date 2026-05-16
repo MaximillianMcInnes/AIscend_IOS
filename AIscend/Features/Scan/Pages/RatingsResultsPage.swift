@@ -22,6 +22,7 @@ struct RatingsResultsPage: View {
             step: pageIndex + 1,
             total: totalPages,
             showsBottomCTA: false,
+            showsStepPill: false,
             topRight: {
                 AIScendShareEntryButton(title: "Share", action: onShare)
             },
@@ -30,11 +31,9 @@ struct RatingsResultsPage: View {
             }
         ) {
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-                ResultsOverviewHero(
-                    result: result,
-                    pageIndex: pageIndex,
-                    totalPages: totalPages
-                )
+                ResultsOverviewHero(result: result)
+
+                ResultsBrandPill()
 
                 ResultsOverviewScoreGrid(items: overviewScores)
 
@@ -61,8 +60,6 @@ struct RatingsResultsPage: View {
 
 private struct ResultsOverviewHero: View {
     let result: PersistedScanRecord?
-    let pageIndex: Int
-    let totalPages: Int
 
     var body: some View {
         ResultsAuroraPanel(intensity: .hero, cornerRadius: 32) {
@@ -80,11 +77,9 @@ private struct ResultsOverviewHero: View {
                 }
 
                 VStack(spacing: AIscendTheme.Spacing.medium) {
-                    ResultsBrandPill()
-
                     HStack(alignment: .top, spacing: AIscendTheme.Spacing.medium) {
                         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
-                            Text(result?.tierTitle ?? "Prime")
+                            Text("AIScend")
                                 .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
                                 .textCase(.uppercase)
 
@@ -94,15 +89,6 @@ private struct ResultsOverviewHero: View {
                         }
 
                         Spacer(minLength: AIscendTheme.Spacing.small)
-
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Text("\(pageIndex + 1)/\(max(totalPages, 1))")
-                                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textSecondary)
-                                .monospacedDigit()
-
-                            ResultsMicroProgress(step: pageIndex + 1, total: totalPages)
-                                .frame(width: 110)
-                        }
                     }
                 }
             }
@@ -114,26 +100,25 @@ private struct ResultsBrandPill: View {
     var body: some View {
         HStack(spacing: AIscendTheme.Spacing.xSmall) {
             Image(systemName: "triangle")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 12, weight: .bold))
 
-            Text("AISCEND.CO.UK")
-                .font(.system(size: 13, weight: .black, design: .default))
-                .tracking(5)
+            Text("AIScend")
+                .font(.system(size: 14, weight: .black, design: .default))
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
         }
         .foregroundStyle(AIscendTheme.Colors.textPrimary)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 13)
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .padding(.vertical, 10)
         .padding(.horizontal, AIscendTheme.Spacing.medium)
         .background(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            AIscendTheme.Colors.accentPrimary,
-                            Color(hex: "A827FF"),
-                            Color(hex: "E23BE8")
+                            AIscendTheme.Colors.accentPrimary.opacity(0.88),
+                            Color(hex: "A827FF").opacity(0.78),
+                            AIscendTheme.Colors.accentCyan.opacity(0.54)
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
@@ -141,10 +126,10 @@ private struct ResultsBrandPill: View {
                 )
         )
         .overlay(
-            Capsule(style: .continuous)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(Color.white.opacity(0.28), lineWidth: 1)
         )
-        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.36), radius: 24, x: 0, y: 10)
+        .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.26), radius: 18, x: 0, y: 8)
     }
 }
 
@@ -264,33 +249,5 @@ private struct ResultsScoreRing: View {
             }
         }
         .frame(width: 94, height: 94)
-    }
-}
-
-private struct ResultsMicroProgress: View {
-    let step: Int
-    let total: Int
-
-    private var progress: Double {
-        guard total > 0 else {
-            return 0
-        }
-
-        return min(max(Double(step) / Double(total), 0), 1)
-    }
-
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule(style: .continuous)
-                    .fill(Color.white.opacity(0.14))
-
-                Capsule(style: .continuous)
-                    .fill(AIscendTheme.Colors.accentGlow)
-                    .frame(width: max(geometry.size.width * progress, 10))
-                    .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.45), radius: 10, x: 0, y: 0)
-            }
-        }
-        .frame(height: 7)
     }
 }

@@ -300,7 +300,7 @@ private struct PreviousScanCardPhotoPair: View {
     let sideRawValue: String?
 
     var body: some View {
-        HStack(spacing: AIscendTheme.Spacing.small) {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
             PreviousScanCardPhotoTile(title: "Front", rawValue: frontRawValue)
             PreviousScanCardPhotoTile(title: "Side", rawValue: sideRawValue)
         }
@@ -316,23 +316,30 @@ private struct PreviousScanCardPhotoTile: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            tilePlaceholder
-            imageContent
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomLeading) {
+                tilePlaceholder
+                    .frame(width: geometry.size.width, height: geometry.size.height)
 
-            LinearGradient(
-                colors: [
-                    .clear,
-                    Color.black.opacity(0.56),
-                    Color.black.opacity(0.78)
-                ],
-                startPoint: .center,
-                endPoint: .bottom
-            )
+                imageContent
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
 
-            Text(title)
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
-                .padding(AIscendTheme.Spacing.medium)
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        Color.black.opacity(0.56),
+                        Color.black.opacity(0.78)
+                    ],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                    .padding(AIscendTheme.Spacing.medium)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(maxWidth: .infinity)
         .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
@@ -348,11 +355,12 @@ private struct PreviousScanCardPhotoTile: View {
             AIscendCachedImage(
                 localURL: source.localURL,
                 remoteURL: source.remoteURL,
-                maxPixelDimension: 700
+                maxPixelDimension: 700,
+                contentMode: .fill
             ) {
                 tilePlaceholder
             }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scaledToFill()
         }
         #else
         if let remoteURL = source.remoteURL {
@@ -368,7 +376,6 @@ private struct PreviousScanCardPhotoTile: View {
                 image
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .empty:
                 tilePlaceholder
                     .overlay(PreviousScanCardShimmer(cornerRadius: 24))
@@ -399,7 +406,6 @@ private struct PreviousScanCardPhotoTile: View {
                     .foregroundStyle(AIscendTheme.Colors.textMuted)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var tileShape: RoundedRectangle {

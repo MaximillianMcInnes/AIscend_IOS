@@ -14,7 +14,7 @@ struct PreviousScanPhotoPair: View {
     let sideRawValue: String?
 
     var body: some View {
-        HStack(spacing: AIscendTheme.Spacing.small) {
+        HStack(alignment: .top, spacing: AIscendTheme.Spacing.small) {
             PreviousScanPhotoTile(title: "Front", rawValue: frontRawValue)
             PreviousScanPhotoTile(title: "Side", rawValue: sideRawValue)
         }
@@ -30,25 +30,30 @@ private struct PreviousScanPhotoTile: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(hex: "10141D"))
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomLeading) {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(hex: "10141D"))
 
-            photoContent
+                photoContent
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
 
-            LinearGradient(
-                colors: [
-                    .clear,
-                    Color.black.opacity(0.74)
-                ],
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .clipShape(tileShape)
+                LinearGradient(
+                    colors: [
+                        .clear,
+                        Color.black.opacity(0.74)
+                    ],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+                .clipShape(tileShape)
 
-            Text(title)
-                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
-                .padding(AIscendTheme.Spacing.medium)
+                Text(title)
+                    .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textPrimary)
+                    .padding(AIscendTheme.Spacing.medium)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .frame(maxWidth: .infinity)
         .aspectRatio(ScanPhotoLayout.portraitAspectRatio, contentMode: .fit)
@@ -63,12 +68,12 @@ private struct PreviousScanPhotoTile: View {
             AIscendCachedImage(
                 localURL: source.localURL,
                 remoteURL: source.remoteURL,
-                maxPixelDimension: 700
+                maxPixelDimension: 700,
+                contentMode: .fill
             ) {
                 placeholder
             }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
+            .scaledToFill()
         } else {
             placeholder
         }
@@ -88,7 +93,6 @@ private struct PreviousScanPhotoTile: View {
                 image
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             case .empty:
                 placeholder
                     .overlay(PreviousScanShimmerBlock(cornerRadius: 24))
@@ -119,7 +123,6 @@ private struct PreviousScanPhotoTile: View {
                     .foregroundStyle(AIscendTheme.Colors.textMuted)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var tileShape: RoundedRectangle {

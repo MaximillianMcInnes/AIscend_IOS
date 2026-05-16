@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Landmark SVG</title>
+
+  <style>
+    * {
+      margin: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: #020202;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    .frame {
+      width: min(96vw, 1400px);
+      aspect-ratio: 1.4 / 1;
+      background: #020202;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .main {
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .dot {
+      fill: #ffffff;
+      filter: drop-shadow(0 0 4px rgba(255,255,255,0.95));
+    }
+  </style>
+</head>
+
+<body>
+  <div class="frame">
+    <svg viewBox="0 0 1400 1000" xmlns="http://www.w3.org/2000/svg">
+
+      <rect width="1400" height="1000" fill="#020202" />
+
+      <!-- face outline -->
+      <path class="main" d="
+        M700 120
+        C565 120 445 205 430 390
+        C420 535 490 770 615 865
+        C655 895 682 905 700 905
+        C718 905 745 895 785 865
+        C910 770 980 535 970 390
+        C955 205 835 120 700 120
+      "/>
+
+      <!-- eyebrows -->
+      <g class="main">
+        <path d="M470 405 C520 350 625 345 670 385"/>
+        <path d="M730 385 C775 345 880 350 930 405"/>
+      </g>
+
+      <!-- eyes -->
+      <g class="main">
+        <path d="M485 450 C535 400 630 400 675 450 C630 480 535 480 485 450Z"/>
+        <path d="M725 450 C770 400 865 400 915 450 C865 480 770 480 725 450Z"/>
+
+        <circle cx="585" cy="450" r="32"/>
+        <circle cx="815" cy="450" r="32"/>
+
+        <circle cx="585" cy="450" r="14"/>
+        <circle cx="815" cy="450" r="14"/>
+      </g>
+
+      <!-- nose -->
+      <g class="main">
+        <path d="M700 455 C680 530 655 600 635 635"/>
+        <path d="M700 455 C720 530 745 600 765 635"/>
+
+        <path d="M635 635 C665 660 735 660 765 635"/>
+        <path d="M650 660 C680 690 720 690 750 660"/>
+      </g>
+
+      <!-- lips -->
+      <g class="main">
+        <path d="M575 740 C630 695 670 720 700 720 C730 720 770 695 825 740"/>
+        <path d="M575 740 C625 795 775 795 825 740"/>
+        <path d="M585 740 C655 753 745 753 815 740"/>
+      </g>
+
+      <!-- jaw -->
+      <g class="main">
+        <path d="M500 740 C550 820 630 890 700 905"/>
+        <path d="M900 740 C850 820 770 890 700 905"/>
+      </g>
+
+      <!-- landmark dots -->
+      <g>
+        <circle class="dot" cx="700" cy="120" r="6"/>
+
+        <circle class="dot" cx="430" cy="390" r="5"/>
+        <circle class="dot" cx="970" cy="390" r="5"/>
+
+        <circle class="dot" cx="485" cy="450" r="6"/>
+        <circle class="dot" cx="585" cy="450" r="6"/>
+        <circle class="dot" cx="675" cy="450" r="6"/>
+
+        <circle class="dot" cx="725" cy="450" r="6"/>
+        <circle class="dot" cx="815" cy="450" r="6"/>
+        <circle class="dot" cx="915" cy="450" r="6"/>
+
+        <circle class="dot" cx="545" cy="390" r="6"/>
+        <circle class="dot" cx="670" cy="385" r="6"/>
+        <circle class="dot" cx="730" cy="385" r="6"/>
+        <circle class="dot" cx="855" cy="390" r="6"/>
+
+        <circle class="dot" cx="700" cy="455" r="6"/>
+
+        <circle class="dot" cx="635" cy="635" r="6"/>
+        <circle class="dot" cx="700" cy="650" r="6"/>
+        <circle class="dot" cx="765" cy="635" r="6"/>
+
+        <circle class="dot" cx="575" cy="740" r="6"/>
+        <circle class="dot" cx="700" cy="720" r="6"/>
+        <circle class="dot" cx="700" cy="755" r="6"/>
+        <circle class="dot" cx="815" cy="740" r="6"/>
+
+        <circle class="dot" cx="700" cy="905" r="6"/>
+      </g>
+
+    </svg>
+  </div>
+</body>
+</html>

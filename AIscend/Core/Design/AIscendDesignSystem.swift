@@ -379,6 +379,7 @@ struct AIscendButtonLabel: View {
 
             Text(title)
                 .lineLimit(1)
+                .minimumScaleFactor(0.76)
 
             if let trailingSymbol {
                 Spacer(minLength: 0)
@@ -538,10 +539,18 @@ struct AIscendBrandMark: View {
                 .blur(radius: size * 0.22)
                 .padding(size * 0.18)
 
-            Image("BrandMark")
-                .resizable()
-                .scaledToFit()
-                .padding(size * 0.18)
+            Text("AI")
+                .font(.system(size: size * 0.36, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            AIscendTheme.Colors.textPrimary,
+                            AIscendTheme.Colors.accentGlow
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         }
         .frame(width: size, height: size)
         .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.24), radius: size * 0.22, x: 0, y: size * 0.08)

@@ -68,3 +68,39 @@ struct WaterDailySummary: Equatable, Sendable {
         insight.shortText
     }
 }
+
+struct HydrationDaySummary: Codable, Equatable, Hashable, Identifiable, Sendable {
+    var id: String
+    var date: Date
+    var targetHydrationMl: Int
+    var totalFluidMl: Int
+    var hydrationCreditMl: Int
+    var waterOnlyMl: Int
+    var sodiumMg: Int
+    var potassiumMg: Int
+    var magnesiumMg: Int
+    var caffeineMg: Int
+    var calories: Int
+    var sugarG: Double
+    var dailyGoalProgress: Double
+    var electrolyteBalanceStatus: ElectrolyteBalanceState
+    var recentDrinks: [DrinkLogEntry]
+    var logs: [DrinkLogEntry]
+    var smartSuggestionText: String
+
+    var progressPercentage: Int {
+        Int((dailyGoalProgress * 100).rounded())
+    }
+
+    var totalElectrolytesMg: Int {
+        sodiumMg + potassiumMg + magnesiumMg
+    }
+
+    var containsSugaryDrinks: Bool {
+        logs.contains { $0.sugarG > 0 }
+    }
+
+    var containsCaffeinatedDrinks: Bool {
+        logs.contains { $0.caffeineMg > 0 }
+    }
+}

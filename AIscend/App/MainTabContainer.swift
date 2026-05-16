@@ -64,15 +64,20 @@ struct MainTabContainer: View {
     @State private var showingDailyPhotoArchive = false
     @State private var showingDailyCheckIn = false
     @State private var showingStreaks = false
+    @State private var showingInitialWelcome = false
     @State private var showingScanCapture = false
     @State private var showingScanResults = false
     @State private var showingGlowUpTracker = false
+    @State private var activeGlowUpRoutine: GlowupRoutinePresentation?
+    @State private var activePremiumPaywall: AIScendPremiumPaywallPresentation?
     @State private var showingRoadmap = false
     @State private var showingNutrition = false
+    @State private var routineHydrationNavigationRequest = 0
     @State private var pendingChatPrompt: String?
     @State private var isKeyboardPresented = false
     @State private var usesQuickFadeSelection = false
     @State private var subscriptionQuota: AIscendChatQuota = .unknown
+    @StateObject private var premiumAccessManager = PremiumAccessManager.shared
     @StateObject private var badgeManager = BadgeManager()
     @StateObject private var dailyCheckInStore = DailyCheckInStore()
     @StateObject private var dailyPhotoStore = DailyPhotoStore()
@@ -89,7 +94,7 @@ struct MainTabContainer: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.clear)
-            .overlay(alignment: .bottom) {
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if shouldShowTabBar {
                     GlassTabBar(
                         selectedTab: selectedTab,
@@ -120,6 +125,7 @@ struct MainTabContainer: View {
             if session.user != nil {
                 await notificationManager.activateRemindersForSignedInUser()
             }
+            await premiumAccessManager.start(userID: session.user?.id, email: session.user?.email)
             await refreshSubscriptionStatus()
             if !queueInitialScanFlowAfterSignUpIfNeeded() {
                 maybePresentDailyPhotoPrompt(.firstOpen)
@@ -141,6 +147,9 @@ struct MainTabContainer: View {
                     maybePresentRoutineStreakPromptIfNeeded()
                 }
             }
+        }
+        .onChange(of: hasPremiumAccess) { _, isPremium in
+            AIScendSuperwallAnalytics.updateSubscriptionStatus(isPremium: isPremium)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeOut(duration: 0.22)) {
@@ -192,6 +201,16 @@ struct MainTabContainer: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .fullScreenCover(isPresented: $showingInitialWelcome) {
+            PostSignInWelcomeView {
+                showingInitialWelcome = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                    select(.scan)
+                    showingScanCapture = true
+                }
+            }
+            .interactiveDismissDisabled(true)
+        }
         .fullScreenCover(isPresented: $showingScanCapture) {
             ScanCaptureFlowView(
                 session: session,
@@ -202,6 +221,9 @@ struct MainTabContainer: View {
                 onOpenRoutine: {
                     select(.routine)
                     showingScanCapture = false
+                },
+                onOpenGlowUpPlan: { result in
+                    presentGlowUpRoutine(from: result, dismissing: .scanCapture)
                 },
                 onOpenChat: {
                     select(.chat)
@@ -222,6 +244,7 @@ struct MainTabContainer: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isUserPremium: hasPremiumAccess,
                 onOpenScan: {
                     select(.scan)
                     showingScanResults = false
@@ -229,6 +252,9 @@ struct MainTabContainer: View {
                 onOpenRoutine: {
                     select(.routine)
                     showingScanResults = false
+                },
+                onOpenGlowUpPlan: { result in
+                    presentGlowUpRoutine(from: result, dismissing: .scanResults)
                 },
                 onOpenChat: {
                     select(.chat)
@@ -247,6 +273,49 @@ struct MainTabContainer: View {
             GlowUpTrackerView {
                 showingGlowUpTracker = false
             }
+        }
+        .fullScreenCover(item: $activeGlowUpRoutine) { presentation in
+            GlowupRoutineFlowView(
+                scanResult: presentation.scanResult,
+                authenticatedUserID: session.user?.id,
+                onOpenChat: {
+                    activeGlowUpRoutine = nil
+                    select(.chat)
+                },
+                onFinish: {
+                    activeGlowUpRoutine = nil
+                    select(.home)
+                },
+                onDismiss: {
+                    activeGlowUpRoutine = nil
+                    select(.home)
+                }
+            )
+        }
+        .fullScreenCover(item: $activePremiumPaywall) { presentation in
+            AIScendPremiumPaywallView(
+                variant: presentation.variant,
+                offer: presentation.offer,
+                onDismiss: {
+                    activePremiumPaywall = nil
+                },
+                onPurchase: { productId in
+                    Task {
+                        if await premiumAccessManager.purchase(productID: productId) {
+                            activePremiumPaywall = nil
+                            await refreshSubscriptionStatus()
+                        }
+                    }
+                },
+                onRestore: {
+                    Task {
+                        if await premiumAccessManager.restorePurchases() {
+                            activePremiumPaywall = nil
+                        }
+                        await refreshSubscriptionStatus()
+                    }
+                }
+            )
         }
         .fullScreenCover(isPresented: $showingRoadmap) {
             AIScendRoadmapView(
@@ -298,10 +367,26 @@ struct MainTabContainer: View {
                 onOpenRoutine: { select(.routine) },
                 onOpenCheckIn: { showingDailyCheckIn = true },
                 onOpenConsistency: { showingStreaks = true },
-                onOpenDailyPhoto: { showingDailyPhotoArchive = true },
-                onCaptureDailyPhoto: { showingDailyPhotoCapture = true },
-                onOpenRoadmap: { showingRoadmap = true },
+                onOpenDailyPhoto: {
+                    requirePremium(.dailyPhotoProgress, source: "dashboard-daily-photo-archive") {
+                        showingDailyPhotoArchive = true
+                    }
+                },
+                onCaptureDailyPhoto: {
+                    requirePremium(.dailyPhotoProgress, source: "dashboard-daily-photo-capture") {
+                        showingDailyPhotoCapture = true
+                    }
+                },
+                onOpenRoadmap: {
+                    requirePremium(.aiRoadmap, source: "dashboard-roadmap") {
+                        showingRoadmap = true
+                    }
+                },
                 onOpenScan: { select(.scan) },
+                onOpenGlowUpRoutine: {
+                    openSavedGlowUpRoutine()
+                },
+                onOpenHydration: openRoutineHydration,
                 onOpenAccount: openHomeProfile,
                 onRefine: { model.resetOnboarding() }
             )
@@ -329,10 +414,19 @@ struct MainTabContainer: View {
                 hydrationStore: hydrationStore,
                 electrolyteStore: electrolyteStore,
                 badgeManager: badgeManager,
+                authenticatedUserID: session.user?.id,
                 onOpenCheckIn: { showingDailyCheckIn = true },
                 onOpenConsistency: { showingStreaks = true },
                 onOpenHydrationChat: openHydrationChat,
-                onOpenNutrition: { showingNutrition = true },
+                onOpenNutrition: {
+                    requirePremium(.nutritionStrategy, source: "routine-nutrition") {
+                        showingNutrition = true
+                    }
+                },
+                onOpenGlowUpRoutine: {
+                    openSavedGlowUpRoutine()
+                },
+                hydrationNavigationRequest: routineHydrationNavigationRequest,
                 onRefine: { model.resetOnboarding() }
             )
             .toolbar(.hidden, for: .navigationBar)
@@ -347,9 +441,20 @@ struct MainTabContainer: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isPremium: hasPremiumAccess,
                 onOpenChat: { select(.chat) },
                 onOpenRoutine: { select(.routine) },
-                onOpenGlowUpTracker: { showingGlowUpTracker = true }
+                onOpenGlowUpPlan: { result in
+                    presentGlowUpRoutine(from: result, dismissing: .none)
+                },
+                onOpenGlowUpTracker: {
+                    requirePremium(.glowUpProgress, source: "scan-archive-tracker") {
+                        showingGlowUpTracker = true
+                    }
+                },
+                onRequestPremiumFeature: { feature, source in
+                    presentPremiumPaywall(for: feature, source: source)
+                }
             )
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -357,7 +462,13 @@ struct MainTabContainer: View {
 
     private var chatTab: some View {
         NavigationStack {
-            AIscendChatScreenContainer(session: session, pendingDraft: $pendingChatPrompt)
+            AIscendChatScreenContainer(
+                session: session,
+                pendingDraft: $pendingChatPrompt,
+                onPremiumUpsell: {
+                    presentPremiumPaywall(for: .chatQuota, source: "chat-quota")
+                }
+            )
                 .toolbar(.hidden, for: .navigationBar)
         }
     }
@@ -380,15 +491,48 @@ struct MainTabContainer: View {
             || showingDailyPhotoArchive
             || showingDailyCheckIn
             || showingStreaks
+            || showingInitialWelcome
             || showingScanCapture
             || showingScanResults
             || showingGlowUpTracker
+            || activeGlowUpRoutine != nil
+            || activePremiumPaywall != nil
             || showingRoadmap
             || showingNutrition
     }
 
     private var hasPremiumAccess: Bool {
-        subscriptionQuota.isPremium || badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked })
+        premiumAccessManager.isPremium
+    }
+
+    private var accessPlan: AIScendUserAccessPlan {
+        let isPremium = premiumAccessManager.isPremium
+        return isPremium ? .premium : .free
+    }
+
+    private enum GlowUpPresentationDismissal {
+        case none
+        case scanCapture
+        case scanResults
+    }
+
+    private func presentGlowUpRoutine(from result: PersistedScanRecord, dismissing dismissal: GlowUpPresentationDismissal) {
+        select(.routine)
+
+        switch dismissal {
+        case .none:
+            activeGlowUpRoutine = GlowupRoutinePresentation(scanResult: result)
+        case .scanCapture:
+            showingScanCapture = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                activeGlowUpRoutine = GlowupRoutinePresentation(scanResult: result)
+            }
+        case .scanResults:
+            showingScanResults = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                activeGlowUpRoutine = GlowupRoutinePresentation(scanResult: result)
+            }
+        }
     }
 
     private func refreshSubscriptionStatus() async {
@@ -399,6 +543,10 @@ struct MainTabContainer: View {
         async let authQuota = AIscendChatService().loadAuthQuotaSnapshot()
 
         subscriptionQuota = mergeQuota(repository: await repositoryQuota, auth: await authQuota)
+        if premiumAccessManager.isPremium {
+            subscriptionQuota.isPremium = true
+        }
+        AIScendSuperwallAnalytics.updateSubscriptionStatus(isPremium: hasPremiumAccess)
     }
 
     private func mergeQuota(repository: AIscendChatQuota, auth: AIscendChatQuota) -> AIscendChatQuota {
@@ -427,7 +575,7 @@ struct MainTabContainer: View {
     }
 
     private var shouldShowTabBar: Bool {
-        !(selectedTab == .chat && isKeyboardPresented)
+        !(selectedTab == .chat && isKeyboardPresented) && !showingInitialWelcome
     }
 
     private func tabIndex(for tab: MainTabDestination) -> Int {
@@ -475,8 +623,7 @@ struct MainTabContainer: View {
                 return
             }
 
-            select(.scan)
-            showingScanCapture = true
+            showingInitialWelcome = true
         }
 
         return true
@@ -530,10 +677,54 @@ struct MainTabContainer: View {
         homePath.append(.profile)
     }
 
+    private func openSavedGlowUpRoutine() {
+        requirePremium(.glowUpRoutine, source: "saved-glowup-routine") {
+            activeGlowUpRoutine = .saved
+        }
+    }
+
+    private func requirePremium(
+        _ feature: AIScendPremiumFeature,
+        source: String,
+        action: () -> Void
+    ) {
+        guard accessPlan.canOpen(feature) else {
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            presentPremiumPaywall(for: feature, source: source)
+            return
+        }
+
+        action()
+    }
+
+    private func presentPremiumPaywall(
+        for feature: AIScendPremiumFeature,
+        source: String
+    ) {
+        AIScendSuperwallAnalytics.trackPaywallRequest(
+            feature: feature,
+            accessPlan: accessPlan,
+            source: source
+        )
+        AIScendSuperwallAnalytics.trackPlacementIfKnown(source, feature: feature, accessPlan: accessPlan)
+
+        activePremiumPaywall = AIScendPremiumPaywallPresentation(
+            variant: feature.paywallVariant,
+            offer: feature.paywallOffer
+        )
+    }
+
     private func openHydrationChat(_ prompt: String) {
         pendingChatPrompt = prompt
         if selectedTab != .chat {
             select(.chat)
+        }
+    }
+
+    private func openRoutineHydration() {
+        routineHydrationNavigationRequest += 1
+        if selectedTab != .routine {
+            select(.routine)
         }
     }
 }
@@ -564,6 +755,164 @@ private extension MainTabContainer {
 
     enum HomeDestination: Hashable {
         case profile
+    }
+}
+
+private struct PostSignInWelcomeView: View {
+    let onContinue: () -> Void
+
+    @State private var appeared = false
+    @State private var scanLineMoves = false
+    @State private var markBreathes = false
+
+    var body: some View {
+        ZStack {
+            AIscendBackdrop()
+
+            LinearGradient(
+                colors: [
+                    AIscendTheme.Colors.accentGlow.opacity(0.16),
+                    .clear,
+                    AIscendTheme.Colors.accentPrimary.opacity(0.10)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer(minLength: 44)
+
+                AIscendBrandMark(size: 64, showsWordmark: false)
+                    .scaleEffect(markBreathes ? 1.04 : 0.98)
+                    .shadow(color: AIscendTheme.Colors.accentGlow.opacity(markBreathes ? 0.38 : 0.18), radius: 28, y: 12)
+                    .padding(.bottom, 34)
+
+                PostSignInFaceStage(scanLineMoves: scanLineMoves)
+                    .frame(width: 214, height: 214)
+                    .padding(.bottom, 34)
+
+                VStack(spacing: 12) {
+                    Text("Welcome to AIScend")
+                        .font(.system(size: 39, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.82)
+
+                    Text("Your glowup starts here.")
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.accentGlow)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.horizontal, 24)
+
+                Spacer(minLength: 34)
+
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.8)
+                    onContinue()
+                } label: {
+                    HStack(spacing: 12) {
+                        Text("Continue")
+                            .font(.system(size: 19, weight: .heavy, design: .rounded))
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 17, weight: .black))
+                    }
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 62)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(AIscendTheme.Colors.accentGlow)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.34), lineWidth: 1)
+                    )
+                    .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.32), radius: 24, y: 12)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 28)
+            }
+            .opacity(appeared ? 1 : 0)
+            .offset(y: appeared ? 0 : 18)
+        }
+        .preferredColorScheme(.dark)
+        .onAppear {
+            withAnimation(.spring(response: 0.58, dampingFraction: 0.86)) {
+                appeared = true
+            }
+
+            withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) {
+                markBreathes = true
+            }
+
+            withAnimation(.easeInOut(duration: 1.35).repeatForever(autoreverses: true)) {
+                scanLineMoves = true
+            }
+        }
+    }
+}
+
+private struct PostSignInFaceStage: View {
+    let scanLineMoves: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 44, style: .continuous)
+                .stroke(AIscendTheme.Colors.borderSubtle.opacity(0.78), lineWidth: 1)
+                .background(
+                    RoundedRectangle(cornerRadius: 44, style: .continuous)
+                        .fill(Color.white.opacity(0.045))
+                )
+
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(AIscendTheme.Colors.accentGlow.opacity(0.76), lineWidth: 3)
+                .frame(width: 124, height: 158)
+                .shadow(color: AIscendTheme.Colors.accentGlow.opacity(0.32), radius: 22)
+
+            Image(systemName: "faceid")
+                .font(.system(size: 74, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.94))
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            .clear,
+                            AIscendTheme.Colors.accentGlow.opacity(0.86),
+                            .clear
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 154, height: 4)
+                .offset(y: scanLineMoves ? 72 : -72)
+
+            VStack {
+                HStack {
+                    scanDot(delayIndex: 0)
+                    scanDot(delayIndex: 1)
+                    scanDot(delayIndex: 2)
+                    Spacer(minLength: 0)
+                }
+                .padding(18)
+
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func scanDot(delayIndex: Int) -> some View {
+        Circle()
+            .fill(AIscendTheme.Colors.accentGlow.opacity(delayIndex == 1 ? 0.92 : 0.52))
+            .frame(width: 8, height: 8)
+            .scaleEffect(scanLineMoves && delayIndex == 1 ? 1.28 : 1)
+            .animation(.easeInOut(duration: 0.72).repeatForever(autoreverses: true).delay(Double(delayIndex) * 0.12), value: scanLineMoves)
     }
 }
 

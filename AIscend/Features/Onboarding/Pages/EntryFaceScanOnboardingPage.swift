@@ -4,23 +4,28 @@
 //
 
 import AVFoundation
+import PhotosUI
 import SwiftUI
+import UIKit
 import Vision
 
 struct EntryFaceScanOnboardingPage: View {
-    let onSkip: () -> Void
     let onComplete: () -> Void
 
     @StateObject private var scanner = EntryHeadScanCameraModel()
     @State private var hasStartedScan = false
     @State private var scanSweep = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var uploadedPreview: UIImage?
+    @State private var isImportingPhoto = false
+    @State private var importErrorMessage: String?
 
     var body: some View {
         EntryOnboardingPageContainer(
-            title: hasStartedScan ? "Scan your head" : "Optional head scan",
+            title: hasStartedScan ? "Scan your head" : "Choose your face scan",
             subtitle: hasStartedScan
                 ? "Use the front camera and slowly turn left, then right. AIScend uses Apple on-device face detection for this calibration."
-                : "You can scan now using the front camera, or skip this and build your plan without a head scan."
+                : "Upload a clear front-facing image or start the guided head scan."
         ) {
             VStack(spacing: 20) {
                 if hasStartedScan {
@@ -31,6 +36,15 @@ struct EntryFaceScanOnboardingPage: View {
                 }
             }
             .animation(.spring(response: 0.46, dampingFraction: 0.86), value: hasStartedScan)
+            .onChange(of: selectedPhotoItem) { _, item in
+                guard let item else {
+                    return
+                }
+
+                Task {
+                    await importUploadedPhoto(from: item)
+                }
+            }
             .onDisappear {
                 scanner.stop()
             }
@@ -40,7 +54,7 @@ struct EntryFaceScanOnboardingPage: View {
     private var preflightChoice: some View {
         VStack(spacing: 18) {
             ZStack {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -52,36 +66,87 @@ struct EntryFaceScanOnboardingPage: View {
                         )
                     )
 
-                VStack(spacing: 18) {
-                    Image(systemName: "faceid")
-                        .font(.system(size: 60, weight: .bold))
-                        .foregroundStyle(EntryOnboardingStyle.purpleSoft)
-                        .frame(width: 112, height: 112)
-                        .background(Circle().fill(EntryOnboardingStyle.purple.opacity(0.16)))
-                        .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                if let uploadedPreview {
+                    Image(uiImage: uploadedPreview)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+                        .overlay {
+                            LinearGradient(
+                                colors: [
+                                    .clear,
+                                    Color.black.opacity(0.58)
+                                ],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 20, weight: .bold))
+                                    .foregroundStyle(EntryOnboardingStyle.purpleSoft)
 
-                    VStack(spacing: 10) {
-                        Text("Apple face detection")
-                            .font(.system(size: 24, weight: .heavy, design: .rounded))
-                            .foregroundStyle(.white)
+                                Text("Image ready")
+                                    .font(.system(size: 20, weight: .heavy, design: .rounded))
+                                    .foregroundStyle(.white)
+                            }
+                            .padding(18)
+                        }
+                } else {
+                    VStack(spacing: 18) {
+                        Image(systemName: "faceid")
+                            .font(.system(size: 58, weight: .bold))
+                            .foregroundStyle(EntryOnboardingStyle.purpleSoft)
+                            .frame(width: 108, height: 108)
+                            .background(Circle().fill(EntryOnboardingStyle.purple.opacity(0.16)))
+                            .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 1))
 
-                        Text("The camera opens only if you start the scan. Face guidance runs on device for this onboarding step.")
-                            .font(.system(size: 16, weight: .semibold, design: .rounded))
-                            .foregroundStyle(EntryOnboardingStyle.mutedText)
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(3)
-                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(spacing: 10) {
+                            Text("Face setup")
+                                .font(.system(size: 24, weight: .heavy, design: .rounded))
+                                .foregroundStyle(.white)
+
+                            Text("Camera guidance runs on device. Uploaded images stay in this onboarding handoff.")
+                                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                                .foregroundStyle(EntryOnboardingStyle.mutedText)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .padding(24)
                 }
-                .padding(24)
             }
-            .frame(height: 310)
+            .frame(height: 286)
             .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                RoundedRectangle(cornerRadius: 26, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
             )
 
             VStack(spacing: 12) {
+                uploadPhotoButton(
+                    title: uploadedPreview == nil ? "Upload image" : "Replace image",
+                    symbol: "photo.on.rectangle.angled",
+                    isPrimary: uploadedPreview == nil
+                )
+
+                if uploadedPreview != nil {
+                    Button {
+                        EntryOnboardingHaptics.success()
+                        onComplete()
+                    } label: {
+                        EntryOnboardingPrimaryButtonLabel(
+                            title: "Use uploaded image",
+                            isActive: true,
+                            progress: 0.94
+                        )
+                    }
+                    .buttonStyle(EntryOnboardingTactileButtonStyle())
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 Button {
                     EntryOnboardingHaptics.advance()
                     withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
@@ -98,19 +163,24 @@ struct EntryFaceScanOnboardingPage: View {
                 }
                 .buttonStyle(EntryOnboardingTactileButtonStyle())
 
-                Button {
-                    EntryOnboardingHaptics.tap()
-                    onSkip()
-                } label: {
-                    Text("Skip head scan")
-                        .font(.system(size: 18, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.82))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Capsule(style: .continuous).fill(Color.white.opacity(0.08)))
-                        .overlay(Capsule(style: .continuous).stroke(Color.white.opacity(0.08), lineWidth: 1))
+                if isImportingPhoto {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(.white)
+
+                        Text("Importing image")
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
+                            .foregroundStyle(EntryOnboardingStyle.mutedText)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 24)
+                } else if let importErrorMessage {
+                    Text(importErrorMessage)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .buttonStyle(EntryOnboardingTactileButtonStyle())
             }
         }
     }
@@ -161,19 +231,12 @@ struct EntryFaceScanOnboardingPage: View {
                 }
                 .buttonStyle(EntryOnboardingTactileButtonStyle())
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else {
-                Button {
-                    EntryOnboardingHaptics.tap()
-                    onSkip()
-                } label: {
-                    Text("Skip for now")
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.78))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 54)
-                        .background(Capsule(style: .continuous).fill(Color.white.opacity(0.07)))
-                }
-                .buttonStyle(EntryOnboardingTactileButtonStyle())
+            } else if scanner.status == .denied || scanner.status == .unavailable {
+                uploadPhotoButton(
+                    title: "Upload image instead",
+                    symbol: "photo.on.rectangle.angled",
+                    isPrimary: true
+                )
             }
         }
         .onChange(of: scanner.status) { _, status in
@@ -245,21 +308,45 @@ struct EntryFaceScanOnboardingPage: View {
                 .padding(.horizontal, 20)
 
             if scanner.status == .denied || scanner.status == .unavailable {
-                Button {
-                    EntryOnboardingHaptics.tap()
-                    onSkip()
-                } label: {
-                    Text("Skip head scan")
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .frame(height: 48)
-                        .background(Capsule(style: .continuous).fill(EntryOnboardingStyle.purple.opacity(0.26)))
-                }
-                .buttonStyle(EntryOnboardingTactileButtonStyle())
+                Text("Upload a clear image to continue without camera access.")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(EntryOnboardingStyle.mutedText)
+                    .multilineTextAlignment(.center)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func uploadPhotoButton(title: String, symbol: String, isPrimary: Bool) -> some View {
+        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 19, weight: .bold))
+
+                Text(title)
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .black))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 20)
+            .frame(maxWidth: .infinity)
+            .frame(height: 58)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(isPrimary ? EntryOnboardingStyle.purple.opacity(0.30) : Color.white.opacity(0.08))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(isPrimary ? EntryOnboardingStyle.purpleSoft.opacity(0.52) : Color.white.opacity(0.10), lineWidth: 1)
+            )
+        }
+        .buttonStyle(EntryOnboardingTactileButtonStyle())
+        .disabled(isImportingPhoto)
+        .opacity(isImportingPhoto ? 0.62 : 1)
     }
 
     private func scanMarker(title: String, isActive: Bool) -> some View {
@@ -287,6 +374,40 @@ struct EntryFaceScanOnboardingPage: View {
             scanSweep = true
         }
     }
+
+    private func importUploadedPhoto(from item: PhotosPickerItem) async {
+        await MainActor.run {
+            isImportingPhoto = true
+            importErrorMessage = nil
+        }
+
+        do {
+            guard
+                let data = try await item.loadTransferable(type: Data.self),
+                let image = UIImage(data: data)
+            else {
+                throw EntryHeadScanPhotoImportError.unavailable
+            }
+
+            await MainActor.run {
+                uploadedPreview = image
+                selectedPhotoItem = nil
+                isImportingPhoto = false
+                EntryOnboardingHaptics.success()
+            }
+        } catch {
+            await MainActor.run {
+                selectedPhotoItem = nil
+                isImportingPhoto = false
+                importErrorMessage = "That image could not be imported. Try a different photo."
+                EntryOnboardingHaptics.warning()
+            }
+        }
+    }
+}
+
+private enum EntryHeadScanPhotoImportError: Error {
+    case unavailable
 }
 
 private enum EntryHeadScanStatus: Equatable {
@@ -571,6 +692,6 @@ private struct EntryScanCueRow: View {
 }
 
 #Preview {
-    EntryFaceScanOnboardingPage(onSkip: {}, onComplete: {})
+    EntryFaceScanOnboardingPage(onComplete: {})
         .background(Color.black)
 }

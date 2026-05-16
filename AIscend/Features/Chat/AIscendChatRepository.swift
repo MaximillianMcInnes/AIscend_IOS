@@ -11,11 +11,26 @@ import Foundation
 import FirebaseFirestore
 #endif
 
+#if canImport(FirebaseAuth)
+import FirebaseAuth
+#endif
+
 protocol AIscendChatRepositoryProtocol: Sendable {
     func loadThreads(for email: String?, userID: String?) async throws -> [AIscendChatThread]
     func save(thread: AIscendChatThread, userID: String?) async throws -> AIscendChatThread
     func loadQuota(for email: String?, userID: String?) async -> AIscendChatQuota
+    func canCreateNewChat(userID: String?, email: String?, isPremium: Bool) async -> Bool
 }
+
+#if canImport(FirebaseAuth)
+func canCreateNewChat(user: User, isPremium: Bool) async -> Bool {
+    await AIscendChatRepository().canCreateNewChat(
+        userID: user.uid,
+        email: user.email,
+        isPremium: isPremium
+    )
+}
+#endif
 
 /// Security note:
 /// - Client email is used only as a query convenience and must never be treated as authoritative on its own.
@@ -112,7 +127,10 @@ actor AIscendChatRepository: AIscendChatRepositoryProtocol {
 
         if let userID, !userID.isEmpty {
             payload["ownerUID"] = userID
+            payload["ownerUid"] = userID
         }
+
+        payload["email_lower"] = thread.email.lowercased()
 
         if !thread.sources.isEmpty {
             payload["sources"] = Self.encodeSources(thread.sources)
@@ -163,6 +181,44 @@ actor AIscendChatRepository: AIscendChatRepositoryProtocol {
         return .unknown
         #endif
     }
+
+    func canCreateNewChat(userID: String?, email: String?, isPremium: Bool) async -> Bool {
+        if isPremium {
+            return true
+        }
+
+        let normalizedEmail = normalizedEmail(email)
+        let normalizedUserID = normalizedUserID(userID)
+
+        guard normalizedUserID != nil || normalizedEmail != nil else {
+            return false
+        }
+
+        #if canImport(FirebaseFirestore)
+        let collectionName = activeChatCollectionName ?? "CHATBOT_CHATS"
+        let collection = firestore.collection(collectionName)
+
+        if let normalizedUserID {
+            for field in ["ownerUid", "ownerUID"] {
+                if await hasAnyDocument(in: collection.whereField(field, isEqualTo: normalizedUserID)) {
+                    return false
+                }
+            }
+        }
+
+        if let normalizedEmail {
+            for field in ["email_lower", "email", "ownerEmail", "emailLowercased"] {
+                if await hasAnyDocument(in: collection.whereField(field, isEqualTo: normalizedEmail)) {
+                    return false
+                }
+            }
+        }
+
+        return true
+        #else
+        return false
+        #endif
+    }
 }
 
 #if canImport(FirebaseFirestore)
@@ -176,7 +232,7 @@ private extension AIscendChatRepository {
         let collection = firestore.collection(collectionName)
 
         if let email {
-            for emailField in ["email", "ownerEmail", "emailLowercased"] {
+        for emailField in ["email", "ownerEmail", "emailLowercased"] {
                 let documents = try await orderedDocuments(
                     for: collection.whereField(emailField, isEqualTo: email)
                 )
@@ -191,7 +247,7 @@ private extension AIscendChatRepository {
             return []
         }
 
-        for userField in ["ownerUID", "uid", "userID", "userId"] {
+        for userField in ["ownerUid", "ownerUID", "uid", "userID", "userId"] {
             let documents = try await orderedDocuments(
                 for: collection.whereField(userField, isEqualTo: userID)
             )
@@ -226,7 +282,7 @@ private extension AIscendChatRepository {
         }
 
         if let email {
-            for emailField in ["email", "ownerEmail", "emailLowercased"] {
+            for emailField in ["email_lower", "email", "ownerEmail", "emailLowercased"] {
                 if let document = try? await firstDocument(in: collection.whereField(emailField, isEqualTo: email)),
                    let quota = Self.normalizeQuota(from: document, source: collectionName)
                 {
@@ -239,7 +295,7 @@ private extension AIscendChatRepository {
             return nil
         }
 
-        for userField in ["ownerUID", "uid", "userID", "userId"] {
+        for userField in ["ownerUid", "ownerUID", "uid", "userID", "userId"] {
             if let document = try? await firstDocument(in: collection.whereField(userField, isEqualTo: userID)),
                let quota = Self.normalizeQuota(from: document, source: collectionName)
             {
@@ -267,6 +323,15 @@ private extension AIscendChatRepository {
     func firstDocument(in query: Query) async throws -> DocumentSnapshot? {
         let snapshot = try await getDocuments(query.limit(to: 1))
         return snapshot.documents.first
+    }
+
+    func hasAnyDocument(in query: Query) async -> Bool {
+        do {
+            let snapshot = try await getDocuments(query.limit(to: 1))
+            return !snapshot.documents.isEmpty
+        } catch {
+            return false
+        }
     }
 
     static func normalizeThread(from document: DocumentSnapshot) -> AIscendChatThread? {

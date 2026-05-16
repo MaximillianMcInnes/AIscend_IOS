@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 private enum ScanStudioTab: String, CaseIterable, Hashable, Identifiable {
     case newScan
@@ -41,13 +42,17 @@ struct AIscendScanStudioView: View {
     let badgeManager: BadgeManager
     let dailyCheckInStore: DailyCheckInStore
     let notificationManager: NotificationManager
+    var isPremium: Bool = false
     var onOpenChat: () -> Void = {}
     var onOpenRoutine: () -> Void = {}
+    var onOpenGlowUpPlan: (PersistedScanRecord) -> Void = { _ in }
     var onOpenGlowUpTracker: () -> Void = {}
+    var onRequestPremiumFeature: (AIScendPremiumFeature, String) -> Void = { _, _ in }
 
     @State private var selectedTab: ScanStudioTab = .newScan
     @State private var showScanFlow = false
     @State private var selectedArchivedScan: ArchivedScanPresentation?
+    @StateObject private var premiumAccessManager = PremiumAccessManager.shared
 
     private var snapshot: DashboardSnapshot {
         .live(from: model)
@@ -66,7 +71,9 @@ struct AIscendScanStudioView: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isPremium: isPremium,
                 onOpenRoutine: onOpenRoutine,
+                onOpenGlowUpPlan: onOpenGlowUpPlan,
                 onOpenChat: onOpenChat,
                 onReturnHome: {
                     showScanFlow = false
@@ -83,7 +90,9 @@ struct AIscendScanStudioView: View {
                 badgeManager: badgeManager,
                 dailyCheckInStore: dailyCheckInStore,
                 notificationManager: notificationManager,
+                isUserPremium: isPremium,
                 allowsPostResultActions: false,
+                showsArchiveChrome: true,
                 onOpenScan: {
                     selectedArchivedScan = nil
                 },
@@ -105,6 +114,16 @@ struct AIscendScanStudioView: View {
                 selection: $selectedTab,
                 snapshot: snapshot,
                 onStartNewScan: {
+                    guard premiumAccessManager.canStartScan() else {
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                        AIScendSuperwallAnalytics.track(
+                            "scan_limit_reached",
+                            params: ["access_plan": "free"]
+                        )
+                        onRequestPremiumFeature(.scanTransformation, "scan_limit_reached")
+                        return
+                    }
+
                     showScanFlow = true
                 }
             )
@@ -115,6 +134,16 @@ struct AIscendScanStudioView: View {
                 session: session,
                 onOpenGlowUpTracker: onOpenGlowUpTracker,
                 onOpenScanRecord: { record in
+                    guard isPremium else {
+                        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                        AIScendSuperwallAnalytics.track(
+                            "previous_scan_locked",
+                            params: ["access_plan": "free"]
+                        )
+                        onRequestPremiumFeature(.previousScanHistory, "previous_scan_locked")
+                        return
+                    }
+
                     let resolvedID = record.meta.scanId?.trimmingCharacters(in: .whitespacesAndNewlines)
                     selectedArchivedScan = ArchivedScanPresentation(
                         id: resolvedID?.isEmpty == false ? resolvedID! : UUID().uuidString,

@@ -12,7 +12,8 @@ struct EntryNameOnboardingPage: View {
     var body: some View {
         EntryOnboardingPageContainer(
             title: "What should we call you?",
-            subtitle: "Your plan feels sharper when the experience speaks to you directly."
+            subtitle: "Your plan feels sharper when the experience speaks to you directly.",
+            usesTypewriterSubtitle: false
         ) {
             VStack(alignment: .leading, spacing: 22) {
                 TextField("Your name", text: $draft.name)

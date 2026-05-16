@@ -84,24 +84,34 @@ struct RoutineCleanSlateView: View {
     @ObservedObject var hydrationStore: HydrationTrackingStore
     @ObservedObject var electrolyteStore: ElectrolyteTrackingStore
     @ObservedObject var badgeManager: BadgeManager
+    let authenticatedUserID: String?
     let onOpenCheckIn: () -> Void
     let onOpenConsistency: () -> Void
     let onOpenHydrationChat: (String) -> Void
     let onOpenNutrition: () -> Void
+    let onOpenGlowUpRoutine: () -> Void
+    let hydrationNavigationRequest: Int
     let onRefine: () -> Void
 
     @State private var selectedTab: RoutineWorkspaceTab = .routine
     @State private var selectedRoutinePlanTab: RoutinePlanTab = .daily
     @State private var selectedTrackerTab: RoutineTrackerTab = .hydration
     @State private var showingJawTraining = false
+    @State private var showingFacialTraining = false
     @StateObject private var jawTrainingStore = JawTrainingStore()
+    @StateObject private var facialTrainingStore = FacialTrainingStore()
 
-    private var baseWaterSummary: WaterDailySummary {
-        hydrationStore.todaySummary()
+    private var hydrationDrinkSummary: HydrationDaySummary {
+        hydrationStore.todayHydrationSummary
     }
 
     private var hydrationElectrolyteSummary: ElectrolyteDailySummary {
-        electrolyteStore.todaySummary(waterIntakeMl: baseWaterSummary.totalWaterMl)
+        let base = electrolyteStore.todaySummary(waterIntakeMl: hydrationDrinkSummary.hydrationCreditMl)
+        return HydrationGoalEngine().combinedElectrolyteSummary(
+            base: base,
+            drinkSummary: hydrationDrinkSummary,
+            waterIntakeMl: hydrationDrinkSummary.hydrationCreditMl
+        )
     }
 
     private var hydrationWaterSummary: WaterDailySummary {
@@ -129,6 +139,12 @@ struct RoutineCleanSlateView: View {
         hydrationStore.combinedInsight(electrolyteSummary: hydrationElectrolyteSummary)
     }
 
+    private var hydrationBalanceMetricDetail: String {
+        hydrationElectrolyteSummary.balanceState == .unknown
+            ? "Log electrolytes to score"
+            : "\(hydrationCompletionCount)/2 signals aligned"
+    }
+
     var body: some View {
         ZStack {
             AIscendBackdrop()
@@ -141,13 +157,28 @@ struct RoutineCleanSlateView: View {
                     selectedRoutineContent
                 }
                 .padding(.horizontal, AIscendTheme.Spacing.screenInset)
-                .padding(.top, AIscendTheme.Spacing.large)
-                .padding(.bottom, AIscendTheme.Layout.floatingTabBarClearance)
+                .padding(.bottom, AIscendTheme.Spacing.xxLarge)
             }
+            .contentMargins(.top, AIscendTheme.Spacing.large, for: .scrollContent)
+            .safeAreaPadding(.top, AIscendTheme.Spacing.medium)
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingJawTraining) {
             JawTrainingView(store: jawTrainingStore)
+        }
+        .fullScreenCover(isPresented: $showingFacialTraining) {
+            FacialTrainingView(store: facialTrainingStore) {
+                showingFacialTraining = false
+            }
+        }
+        .task(id: authenticatedUserID) {
+            await facialTrainingStore.applyAuthenticatedUserID(authenticatedUserID)
+        }
+        .onAppear {
+            openHydrationTrackerIfRequested(hydrationNavigationRequest)
+        }
+        .onChange(of: hydrationNavigationRequest) { _, newValue in
+            openHydrationTrackerIfRequested(newValue)
         }
     }
 
@@ -532,6 +563,8 @@ struct RoutineCleanSlateView: View {
                 }
             }
 
+            glowUpRoutineEntryCard
+
             ForEach(model.dailyRoutineSections) { section in
                 VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                     HStack(alignment: .center, spacing: AIscendTheme.Spacing.small) {
@@ -556,6 +589,61 @@ struct RoutineCleanSlateView: View {
                 .aiscendPanel(.elevated)
             }
         }
+    }
+
+    private var glowUpRoutineEntryCard: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            onOpenGlowUpRoutine()
+        } label: {
+            HStack(alignment: .center, spacing: AIscendTheme.Spacing.medium) {
+                AIscendIconOrb(symbol: "scope", accent: .sky, size: 56)
+
+                VStack(alignment: .leading, spacing: AIscendTheme.Spacing.xSmall) {
+                    HStack(spacing: AIscendTheme.Spacing.xSmall) {
+                        AIscendBadge(title: "Glow-Up", symbol: "sparkles", style: .accent)
+                        AIscendBadge(title: "Saved plan", symbol: "tray.full.fill", style: .neutral)
+                    }
+
+                    Text("Open Glow-Up routine")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(AIscendTheme.Colors.textPrimary)
+                        .multilineTextAlignment(.leading)
+
+                    Text("Load the saved scan-generated plan, then swipe through haircut, brows, jaw, lips, side profile, skin, and general actions.")
+                        .aiscendTextStyle(.secondaryBody, color: AIscendTheme.Colors.textSecondary)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(AIscendTheme.Colors.accentGlow)
+            }
+            .padding(AIscendTheme.Spacing.large)
+            .background(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                AIscendTheme.Colors.cardGradientStart.opacity(0.98),
+                                AIscendTheme.Colors.accentDeep.opacity(0.30),
+                                AIscendTheme.Colors.cardGradientEnd.opacity(0.98)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AIscendTheme.Radius.extraLarge, style: .continuous)
+                    .stroke(AIscendTheme.Colors.accentGlow.opacity(0.24), lineWidth: 1)
+            )
+            .shadow(color: AIscendTheme.Colors.accentPrimary.opacity(0.14), radius: 26, x: 0, y: 14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open Glow-Up routine")
     }
 
     private var skinCareRoutineTab: some View {
@@ -620,19 +708,15 @@ struct RoutineCleanSlateView: View {
 
     private var exerciseRoutinePlaceholderTab: some View {
         VStack(alignment: .leading, spacing: AIscendTheme.Spacing.large) {
-            RoutineComingSoonCard(
-                eyebrow: "Exercises",
-                title: "Facial exercise routine",
-                subtitle: "A guided placeholder for jaw relaxation, tongue posture, neck alignment, and facial tension work.",
-                symbol: "face.smiling.inverse",
-                accent: .sky
-            )
+            FacialTrainingRoutineCard(store: facialTrainingStore) {
+                showingFacialTraining = true
+            }
 
             VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
                 AIscendSectionHeader(
                     eyebrow: "Preview",
-                    title: "Routine structure",
-                    subtitle: "The final flow will keep exercise short, safe, and repeatable."
+                    title: "Preview Exercises",
+                    subtitle: "Keep the work short, safe, and repeatable alongside the full protocol."
                 )
 
                 routineCareRow(title: "Warm-up", detail: "Gentle neck and jaw mobility before any hold.", symbol: "wind", accent: .sky)
@@ -733,7 +817,7 @@ struct RoutineCleanSlateView: View {
                     RoutineSlateMetric(
                         title: "Balance",
                         value: hydrationElectrolyteSummary.balanceState.title,
-                        detail: "\(hydrationCompletionCount)/2 signals aligned",
+                        detail: hydrationBalanceMetricDetail,
                         accent: .dawn
                     )
                 }
@@ -749,7 +833,7 @@ struct RoutineCleanSlateView: View {
                     RoutineSlateMetric(
                         title: "Balance",
                         value: hydrationElectrolyteSummary.balanceState.title,
-                        detail: "\(hydrationCompletionCount)/2 signals aligned",
+                        detail: hydrationBalanceMetricDetail,
                         accent: .dawn
                     )
                 }
@@ -767,51 +851,19 @@ struct RoutineCleanSlateView: View {
     }
 
     private var hydrationTrackerCard: some View {
-        RoutineTrackerDetailCard(
-            eyebrow: "Hydration",
-            title: "\(HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true)) logged",
-            subtitle: hydrationWaterSummary.shortInsight,
-            accent: .mint,
-            progress: hydrationWaterSummary.progress,
-            progressLabel: "Target \(HydrationTrackingEngine.formatWater(hydrationWaterSummary.targetWaterMl, prefersCompact: true))",
-            stats: [
-                RoutineTrackerStat(title: "Logged", value: HydrationTrackingEngine.formatWater(hydrationWaterSummary.totalWaterMl, prefersCompact: true), symbol: "drop.fill", accent: .mint),
-                RoutineTrackerStat(title: "Status", value: hydrationWaterSummary.hydrationState.title, symbol: "gauge.with.dots.needle.50percent", accent: .sky),
-                RoutineTrackerStat(title: "Entries", value: "\(hydrationWaterSummary.entries.count)", symbol: "list.bullet.clipboard.fill", accent: .dawn)
-            ],
-            actions: [
-                RoutineTrackerAction(
-                    id: "hydration-remove",
-                    title: "Remove Last Log",
-                    symbol: "minus",
-                    variant: .secondary,
-                    action: { hydrationStore.removeLastEntry() }
-                ),
-                RoutineTrackerAction(
-                    id: "hydration-plus",
-                    title: "Add 250 ml",
-                    symbol: "plus",
-                    variant: .primary,
-                    action: { hydrationStore.addWater(amountMl: 250, sourceName: "Routine quick add") }
-                )
-            ]
+        HydrationTrackingView(
+            store: hydrationStore,
+            electrolyteStore: electrolyteStore,
+            onOpenChat: onOpenHydrationChat
         )
     }
 
     private var electrolyteTrackerCard: some View {
-        RoutineTrackerDetailCard(
-            eyebrow: "Electrolytes",
-            title: hydrationElectrolyteSummary.balanceState.title,
-            subtitle: hydrationElectrolyteSummary.shortInsight,
-            accent: .dawn,
-            progress: electrolyteProgress,
-            progressLabel: "\(hydrationElectrolyteSummary.entries.count) logs today",
-            stats: [
-                RoutineTrackerStat(title: "Sodium", value: "\(hydrationElectrolyteSummary.totalSodiumMg) mg", symbol: "bolt.heart.fill", accent: .dawn),
-                RoutineTrackerStat(title: "Potassium", value: "\(hydrationElectrolyteSummary.totalPotassiumMg) mg", symbol: "leaf.fill", accent: .mint),
-                RoutineTrackerStat(title: "Magnesium", value: "\(hydrationElectrolyteSummary.totalMagnesiumMg) mg", symbol: "capsule.fill", accent: .sky)
-            ],
-            actions: electrolyteQuickActions
+        ElectrolyteTrackingView(
+            store: electrolyteStore,
+            waterIntakeMl: hydrationDrinkSummary.hydrationCreditMl,
+            drinkSummary: hydrationDrinkSummary,
+            onOpenChat: onOpenHydrationChat
         )
     }
 
@@ -966,6 +1018,17 @@ struct RoutineCleanSlateView: View {
             14
         default:
             10
+        }
+    }
+
+    private func openHydrationTrackerIfRequested(_ request: Int) {
+        guard request > 0 else {
+            return
+        }
+
+        withAnimation(AIscendTheme.Motion.reveal) {
+            selectedTab = .tracking
+            selectedTrackerTab = .hydration
         }
     }
 }
@@ -2195,6 +2258,8 @@ struct AccountView: View {
     @State private var isLoadingSubscription = true
     @State private var scanArchive: [PersistedScanRecord] = []
     @State private var isLoadingScanStats = true
+    @State private var activePremiumPaywall: AIScendPremiumPaywallPresentation?
+    @StateObject private var premiumAccessManager = PremiumAccessManager.shared
 
     var body: some View {
         ZStack {
@@ -2242,6 +2307,7 @@ struct AccountView: View {
         .task {
             await notificationManager.refreshAuthorizationStatus()
             hydrateProfileEditorIfNeeded()
+            await premiumAccessManager.refresh(userID: session.user?.id, email: session.user?.email)
             await refreshProfileStatus()
         }
         .onChange(of: selectedAvatarItem) { _, newValue in
@@ -2258,7 +2324,7 @@ struct AccountView: View {
                 dailyCheckInStore: dailyCheckInStore,
                 badgeManager: badgeManager,
                 notificationManager: notificationManager,
-                isPremium: badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked }),
+                isPremium: premiumAccessManager.isPremium,
                 onComplete: {},
                 onDismiss: { showingDailyCheckIn = false }
             )
@@ -2280,6 +2346,31 @@ struct AccountView: View {
             )
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(item: $activePremiumPaywall) { presentation in
+            AIScendPremiumPaywallView(
+                variant: presentation.variant,
+                offer: presentation.offer,
+                onDismiss: {
+                    activePremiumPaywall = nil
+                },
+                onPurchase: { productId in
+                    Task {
+                        if await premiumAccessManager.purchase(productID: productId) {
+                            activePremiumPaywall = nil
+                            await refreshProfileStatus()
+                        }
+                    }
+                },
+                onRestore: {
+                    Task {
+                        if await premiumAccessManager.restorePurchases() {
+                            activePremiumPaywall = nil
+                        }
+                        await refreshProfileStatus()
+                    }
+                }
+            )
         }
     }
 
@@ -2383,6 +2474,7 @@ struct AccountView: View {
                         .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+
             }
         }
     }
@@ -2438,6 +2530,20 @@ struct AccountView: View {
                         }
                     }
                 }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: AIscendTheme.Spacing.small) {
+                        premiumActionButtons
+                    }
+
+                    VStack(spacing: AIscendTheme.Spacing.small) {
+                        premiumActionButtons
+                    }
+                }
+
+                #if DEBUG
+                debugEntitlementStateCard
+                #endif
             }
         }
     }
@@ -2494,6 +2600,70 @@ struct AccountView: View {
             }
         }
     }
+
+    private var premiumActionButtons: some View {
+        Group {
+            Button {
+                activePremiumPaywall = AIScendPremiumPaywallPresentation(variant: .progress)
+                AIScendSuperwallAnalytics.track(
+                    "settings_upgrade_to_premium",
+                    params: ["access_plan": hasPremiumAccess ? "premium" : "free"]
+                )
+            } label: {
+                AIscendButtonLabel(title: "Upgrade to Premium", leadingSymbol: "crown.fill")
+            }
+            .buttonStyle(AIscendButtonStyle(variant: .primary))
+
+            Button {
+                Task {
+                    _ = await premiumAccessManager.restorePurchases()
+                    await refreshProfileStatus()
+                }
+            } label: {
+                AIscendButtonLabel(title: "Restore Purchases", leadingSymbol: "arrow.clockwise")
+            }
+            .buttonStyle(AIscendButtonStyle(variant: .secondary))
+
+            Button {
+                premiumAccessManager.openManageSubscriptions()
+            } label: {
+                AIscendButtonLabel(title: "Manage Subscription", leadingSymbol: "person.crop.circle.badge.checkmark")
+            }
+            .buttonStyle(AIscendButtonStyle(variant: .ghost))
+        }
+    }
+
+    #if DEBUG
+    private var debugEntitlementStateCard: some View {
+        VStack(alignment: .leading, spacing: AIscendTheme.Spacing.small) {
+            Text("DEBUG Entitlement")
+                .aiscendTextStyle(.caption, color: AIscendTheme.Colors.accentGlow)
+
+            ProfileInfoRow(
+                title: "StoreKit",
+                detail: "\(premiumAccessManager.subscriptionStatus.rawValue) · \(premiumAccessManager.isPremium ? "Premium" : "Free")",
+                symbol: "shippingbox.fill",
+                accent: .sky
+            )
+
+            ProfileInfoRow(
+                title: "Product",
+                detail: premiumAccessManager.premiumProductID ?? "No verified entitlement",
+                symbol: "tag.fill",
+                accent: .mint
+            )
+
+            ProfileInfoRow(
+                title: "Scans left",
+                detail: premiumAccessManager.scansLeft.map(String.init) ?? "Unknown",
+                symbol: "viewfinder",
+                accent: .dawn
+            )
+        }
+        .padding(AIscendTheme.Spacing.medium)
+        .aiscendPanel(.muted)
+    }
+    #endif
 
     private var profileProgressSection: some View {
         ProfileSectionCard(
@@ -2788,7 +2958,7 @@ struct AccountView: View {
     }
 
     private var hasPremiumAccess: Bool {
-        subscriptionQuota.isPremium || badgeManager.earnedBadges.contains(where: { $0.id == .premiumUnlocked })
+        premiumAccessManager.isPremium
     }
 
     private var subscriptionDetail: String {
@@ -2882,6 +3052,9 @@ struct AccountView: View {
 
         scanArchive = loadedArchive
         subscriptionQuota = resolvedQuota
+        if premiumAccessManager.isPremium {
+            subscriptionQuota.isPremium = true
+        }
         isLoadingScanStats = false
         isLoadingSubscription = false
     }

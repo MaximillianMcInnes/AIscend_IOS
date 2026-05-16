@@ -11,13 +11,24 @@ import UIKit
 struct ElectrolyteTrackingView: View {
     @ObservedObject var store: ElectrolyteTrackingStore
     var waterIntakeMl: Int?
+    var drinkSummary: HydrationDaySummary?
     var onOpenChat: (String) -> Void
 
     @State private var showingManualEntry = false
     @State private var highlightedPresetID: String?
 
     private var summary: ElectrolyteDailySummary {
-        store.todaySummary(waterIntakeMl: waterIntakeMl)
+        let base = store.todaySummary(waterIntakeMl: waterIntakeMl)
+
+        guard let drinkSummary else {
+            return base
+        }
+
+        return HydrationGoalEngine().combinedElectrolyteSummary(
+            base: base,
+            drinkSummary: drinkSummary,
+            waterIntakeMl: waterIntakeMl
+        )
     }
 
     var body: some View {

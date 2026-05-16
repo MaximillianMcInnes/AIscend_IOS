@@ -98,7 +98,7 @@ struct PaywallView: View {
                 )
 
                 HStack(spacing: AIscendTheme.Spacing.small) {
-                    PaywallMetricChip(title: "7 days free", detail: "Start now")
+                    PaywallMetricChip(title: "£5.99/mo", detail: "Monthly")
                     PaywallMetricChip(title: "Full report", detail: "Unlocked")
                     PaywallMetricChip(title: "Daily loop", detail: "Protected")
                 }
@@ -158,7 +158,7 @@ struct PaywallView: View {
                 .buttonStyle(AIscendButtonStyle(variant: .secondary))
             }
 
-            Text("Cancel any time. Premium is designed to deepen the result, not trap the user.")
+            Text("Billed through Apple. Cancel anytime in Settings.")
                 .aiscendTextStyle(.caption, color: AIscendTheme.Colors.textMuted)
                 .frame(maxWidth: .infinity, alignment: .center)
         }

@@ -143,22 +143,17 @@ struct HarmonyResultsPage: View {
                     explanation: row.explanation,
                     status: status(for: numericValue, config: ratio)
                 ) {
-                    VStack(alignment: .leading, spacing: AIscendTheme.Spacing.medium) {
-                        BellCurveMini(
-                            percentile: percentile(for: numericValue, config: ratio),
-                            typicalRange: typicalPercentileRange(for: ratio),
-                            label: "Placement P\(Int(percentile(for: numericValue, config: ratio).rounded()))"
-                        )
-
-                        RangeZoneBar(
-                            value: numericValue,
-                            domain: ratio.domain,
-                            idealRange: ratio.ideal,
-                            warningRanges: ratio.warningRanges,
-                            valueLabel: "You: \(formattedRatio(numericValue))",
-                            targetLabel: "Ideal \(formattedRatio(ratio.ideal.lowerBound))-\(formattedRatio(ratio.ideal.upperBound))"
-                        )
-                    }
+                    RatioPlacementCard(
+                        title: "Ratio placement",
+                        userValue: numericValue,
+                        percentile: percentile(for: numericValue, config: ratio),
+                        typicalRange: typicalPercentileRange(for: ratio),
+                        domain: ratio.domain,
+                        idealRange: ratio.ideal,
+                        warningRanges: ratio.warningRanges,
+                        mean: ratio.mean,
+                        sd: ratio.sd
+                    )
                 }
             } else {
                 ResultsTraitRow(
@@ -242,7 +237,17 @@ struct HarmonyResultsPage: View {
     }
 
     private func numericValue(for row: HarmonyRowSpec) -> Double? {
-        payloadValue(for: row)?.numberValue
+        for key in row.keys {
+            if let value = numericPayloadValue(for: [key], in: face)?.numberValue {
+                if row.id == "width_height", value > 1 {
+                    return 1 / value
+                }
+
+                return value
+            }
+        }
+
+        return payloadValue(for: row)?.numberValue
     }
 
     private func payloadValue(for row: HarmonyRowSpec) -> HarmonyPayloadValue? {
@@ -268,6 +273,32 @@ struct HarmonyResultsPage: View {
         for value in payload.values {
             if case .object(let nested) = value,
                let found = firstPayloadValue(for: keys, in: nested) {
+                return found
+            }
+        }
+
+        return nil
+    }
+
+    private func numericPayloadValue(
+        for keys: [String],
+        in payload: [String: HarmonyPayloadValue]
+    ) -> HarmonyPayloadValue? {
+        let normalizedKeys = Set(keys.map(normalizedKey))
+
+        for key in keys {
+            if let value = payload[key], value.numberValue != nil {
+                return value
+            }
+        }
+
+        for (key, value) in payload where normalizedKeys.contains(normalizedKey(key)) && value.numberValue != nil {
+            return value
+        }
+
+        for value in payload.values {
+            if case .object(let nested) = value,
+               let found = numericPayloadValue(for: keys, in: nested) {
                 return found
             }
         }
@@ -532,7 +563,7 @@ private extension HarmonyResultsPage {
         ),
         HarmonyRowSpec(
             id: "FWHR",
-            label: "FWHR",
+            label: "Face width balance",
             keys: ["FWHR", "FWHR_"],
             explanation: "Width versus upper-face height.",
             isPremium: true,
@@ -540,8 +571,8 @@ private extension HarmonyResultsPage {
         ),
         HarmonyRowSpec(
             id: "width_height",
-            label: "Width / height",
-            keys: ["width_height"],
+            label: "Face length vs width",
+            keys: ["width_height", "face_width_height", "face_height_width"],
             explanation: "Facial length versus width.",
             isPremium: true,
             ratio: widthHeightConfig

@@ -14,7 +14,7 @@ enum ScanPhotoLayout {
     static let portraitAspectRatio: CGFloat = 3.0 / 4.0
 }
 
-enum ScanCaptureGuide {
+enum ScanCaptureGuide: Equatable {
     case front
     case side
 

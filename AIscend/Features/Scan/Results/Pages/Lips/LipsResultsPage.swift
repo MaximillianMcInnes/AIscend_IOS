@@ -30,6 +30,7 @@ struct LipsResultsPage: View {
     }
 
     init(
+        lips: [String: ScanJSONValue],
         face: [String: ScanJSONValue],
         isPaid: Bool,
         step: Int,
@@ -37,11 +38,18 @@ struct LipsResultsPage: View {
         goNext: @escaping () -> Void,
         onUpgrade: @escaping () -> Void
     ) {
-        self.rows = ScanResultsPremiumPageSupport.rows(
-            from: face,
-            keywords: ["lip", "mouth", "philtrum", "smile", "fullness", "cupid", "colour", "color"],
+        let lipRows = ScanResultsPremiumPageSupport.rows(
+            from: lips,
+            keywords: ["lip", "mouth", "philtrum", "smile", "fullness", "cupid", "colour", "color", "type", "size", "width"],
             fallbackExplanation: "A descriptive lip trait from the scan. Use it as practical guidance."
         )
+        let contextRows = ScanResultsPremiumPageSupport.rows(
+            from: face,
+            keywords: ["mouth", "philtrum", "smile"],
+            fallbackExplanation: "A descriptive mouth-area trait from the scan. Use it as practical guidance."
+        )
+
+        self.rows = Self.deduplicated(lipRows + contextRows)
         self.isPaid = isPaid
         self.step = step
         self.total = total
@@ -93,6 +101,10 @@ struct LipsResultsPage: View {
     private func explanation(for row: PremiumResultTrait) -> String {
         let text = ScanResultsPremiumPageSupport.normalize(row.key + " " + row.label)
 
+        if text.contains("size") {
+            return "Size captures the top-to-bottom lip proportion so thinness or fullness does not get flattened into one generic label."
+        }
+
         if text.contains("fullness") {
             return "Fullness affects perceived balance and softness in the lower centre face."
         }
@@ -116,9 +128,24 @@ struct LipsResultsPage: View {
         return row.explanation.isEmpty ? "A descriptive lip trait from the scan. Use it as practical guidance." : row.explanation
     }
 
+    private static func deduplicated(_ rows: [PremiumResultTrait]) -> [PremiumResultTrait] {
+        var seen = Set<String>()
+
+        return rows.filter { row in
+            let key = ScanResultsPremiumPageSupport.normalize(row.key)
+            guard !seen.contains(key) else {
+                return false
+            }
+
+            seen.insert(key)
+            return true
+        }
+    }
+
     private static let freeKeys: Set<String> = [
         "type",
-        "fullness"
+        "fullness",
+        "size"
     ]
 
     private static let fallbackRows: [PremiumResultTrait] = [
